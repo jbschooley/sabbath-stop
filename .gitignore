@@ -2,8 +2,9 @@
 raw/
 raw/checkpoint.json
 
-# Generated dataset. The refresh workflow commits data/ from CI;
-# keep local builds out of your own commits.
+# Generated dataset. The refresh workflow force-adds data/ from CI; this
+# keeps a local build out of your own commits until then. Once CI has
+# committed it, local rebuilds show up as modifications -- don't commit those.
 data/
 
 __pycache__/
