@@ -3,7 +3,7 @@
 
 import { DEFAULT_FILTERS, findCandidates, reapply } from "./finder.js";
 import { debounce, reverse, suggest } from "./geocode.js";
-import { fromAppleUrl, fromGoogleUrl, fromPlaces, fromTrackFile, looksLikeApple, looksLikeGoogle } from "./providers.js";
+import { defaultDwellMinutes, fromPlaces, fromTrackFile, parseLink } from "./providers.js";
 import { applyDwell, matrix, routePlaces } from "./routing.js";
 import { defaultDepartureLocal, fmtDateTime, fmtHHMM, toDatetimeLocal, tzAbbrev } from "./tz.js";
 
@@ -283,15 +283,53 @@ function readDeparture() {
   return d;
 }
 
+// A pasted link is an importer, not a route mode: it fills the A -> B fields
+// and switches to that tab, so there is one place the route comes from.
+function importLink() {
+  const url = $("link").value.trim();
+  if (!url) throw new Error("Paste a directions link.");
+  const { places, departure } = parseLink(url);
+
+  // Reset the A -> B form.
+  $("waypoints").innerHTML = "";
+  state.places = { origin: null, destination: null, waypoints: [], dwellMin: [] };
+
+  const setField = (id, key, p) => {
+    if (p && typeof p.lng === "number") { state.places[key] = p; $(id).value = p.name; }
+    else { state.places[key] = null; $(id).value = p ? p.query || p.name : ""; }
+  };
+  setField("origin", "origin", places[0]);
+  setField("destination", "destination", places[places.length - 1]);
+  for (const p of places.slice(1, -1)) {
+    const pick = typeof p.lng === "number" ? p : null;
+    addWaypointRow(pick, pick ? undefined : p.query || p.name, defaultDwellMinutes(p) || "");
+  }
+  if (departure) {
+    $("departure").value = toDatetimeLocal(departure);
+    saveDeparture($("departure").value);
+  }
+  selectTab("ab");
+  saveRouteInput();
+
+  const notes = [];
+  if (departure) notes.push("departure taken from the link");
+  if (!places[0]) { notes.push("no start in the link, using your location"); useMyLocation(); }
+  setStatus(`Imported ${places.length} places${notes.length ? ` (${notes.join("; ")})` : ""}.`);
+  return !places[0]; // true when the origin is still being resolved
+}
+
+function selectTab(name) {
+  const btn = document.querySelector(`[role="tab"][data-tab="${name}"]`);
+  if (btn) btn.click();
+}
+
 async function buildRoute() {
   const departure = readDeparture();
   const mode = state.routeMode;
   if (mode === "link") {
-    const url = $("link").value.trim();
-    if (!url) throw new Error("Paste a directions link.");
-    if (looksLikeGoogle(url)) return fromGoogleUrl(url, departure);
-    if (looksLikeApple(url)) return fromAppleUrl(url, departure);
-    throw new Error("That doesn't look like a Google Maps or Apple Maps link.");
+    const waitingForLocation = importLink();
+    if (waitingForLocation) throw new Error("Getting your location for the start. Press Find wards again once it shows in the From field.");
+    return buildRoute();
   }
   if (mode === "file") {
     const f = $("file").files[0];
@@ -341,8 +379,8 @@ async function go() {
   try {
     setStatus("Routing…");
     const route = await buildRoute();
-    if (route.departureFromLink || (route.source === "gpx" && route.provider === "file")) {
-      // The link or file carried its own departure; show it in the picker.
+    if (route.source === "gpx" && route.provider === "file") {
+      // The file carried its own timestamps; show the departure in the picker.
       $("departure").value = toDatetimeLocal(route.departure);
       saveDeparture($("departure").value);
     }
@@ -351,8 +389,7 @@ async function go() {
     drawRoute(route);
     const scaled = route.timeScale && route.timeScale !== 1 ? ` (scaled ×${route.timeScale.toFixed(2)} to your Maps time)` : "";
     const dwell = route.dwellSeconds ? ` plus ${fmtDuration(route.dwellSeconds)} at stops` : "";
-    const fromLink = route.departureFromLink ? " Departure taken from the link." : "";
-    setStatus(`Route: ${route.totalMiles.toFixed(0)} mi, ${fmtDuration(route.totalSeconds - (route.dwellSeconds || 0))} driving${dwell} via ${route.provider}${scaled}.${fromLink} Finding wards…`);
+    setStatus(`Route: ${route.totalMiles.toFixed(0)} mi, ${fmtDuration(route.totalSeconds - (route.dwellSeconds || 0))} driving${dwell} via ${route.provider}${scaled}. Finding wards…`);
     const candidates = await findCandidates(route, state.filters, {
       loadTile,
       matrix,
@@ -597,6 +634,14 @@ function boot() {
   $("add-waypoint").addEventListener("click", () => { addWaypointRow(); saveRouteInput(); });
   $("use-location").addEventListener("click", useMyLocation);
   $("link").addEventListener("input", saveRouteInput);
+  // Import as soon as a link lands in the field, whether pasted or typed.
+  const tryImport = () => {
+    if (!$("link").value.trim()) return;
+    try { importLink(); } catch (e) { setStatus(e.message, true); }
+  };
+  $("link").addEventListener("paste", () => setTimeout(tryImport, 0));
+  $("link").addEventListener("change", tryImport);
+  $("import-link").addEventListener("click", tryImport);
   $("traffic-h").addEventListener("change", saveRouteInput);
   $("traffic-m").addEventListener("change", saveRouteInput);
   restoreRouteInput();

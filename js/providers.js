@@ -61,6 +61,9 @@ function placeFromText(text) {
 
 // Expanded /dir/ URLs only. Short maps.app.goo.gl links cannot be followed
 // from a browser because the redirect is blocked by CORS.
+// Returns [origin, ...stops, destination]; origin is null when the link has
+// an empty first segment ("/dir//Cedar+City/..."), which Google emits for
+// "your location".
 export function parseGoogleUrl(url) {
   const u = new URL(url);
   if (/goo\.gl$/.test(u.hostname) || u.hostname === "maps.app.goo.gl") {
@@ -68,14 +71,16 @@ export function parseGoogleUrl(url) {
   }
   const i = u.pathname.indexOf("/dir/");
   if (i < 0) throw new Error("Not a Google Maps directions URL (no /dir/ in the path).");
-  const segs = u.pathname.slice(i + 5).split("/").filter(Boolean);
+  const segs = u.pathname.slice(i + 5).split("/");
   const places = [];
-  for (const raw of segs) {
-    if (raw.startsWith("@") || raw.startsWith("data=")) break;
-    const text = decodeURIComponent(raw.replace(/\+/g, " "));
+  segs.forEach((raw, idx) => {
+    if (raw.startsWith("@") || raw.startsWith("data=")) { segs.length = idx; return; }
+    const text = decodeURIComponent(raw.replace(/\+/g, " ")).trim();
     if (text) places.push(placeFromText(text));
-  }
-  if (places.length < 2) throw new Error("Need an origin and a destination in the link.");
+    else if (idx === 0) places.push(null);
+  });
+  while (places.length && places[places.length - 1] === null) places.pop();
+  if (places.length < 2) throw new Error("Need at least a destination and one more place in the link.");
   return places;
 }
 
@@ -92,29 +97,37 @@ export function parseGoogleDeparture(url) {
   return y >= 2020 && y < 2100 ? d : null;
 }
 
-export async function fromGoogleUrl(url, departure) {
-  const fromLink = parseGoogleDeparture(url);
-  const route = await routeThrough("google", await resolvePlaces(parseGoogleUrl(url)), fromLink || departure);
-  if (fromLink) route.departureFromLink = true;
-  return route;
-}
-
 // ---------------------------------------------------------------- Apple Maps link
 
+// saddr is optional (Apple omits it for "current location"); daddr may chain
+// stops with " to:" (Apple's multi-stop form). Returns [origin|null, ..., dest].
 export function parseAppleUrl(url) {
   const u = new URL(url);
   const s = u.searchParams.get("saddr");
   const d = u.searchParams.get("daddr");
-  if (!s || !d) throw new Error("Apple Maps link needs both saddr and daddr.");
-  return [placeFromText(s), placeFromText(d)];
-}
-
-export async function fromAppleUrl(url, departure) {
-  return routeThrough("apple", await resolvePlaces(parseAppleUrl(url)), departure);
+  if (!d) throw new Error("Apple Maps link needs a daddr (destination).");
+  const stops = d.split(/\s+to:\s*/i).map((t) => t.trim()).filter(Boolean).map(placeFromText);
+  return [s && s.trim() ? placeFromText(s.trim()) : null, ...stops];
 }
 
 export function looksLikeGoogle(url) { return /google\.[a-z.]+\/maps|goo\.gl/.test(url); }
 export function looksLikeApple(url) { return /maps\.apple\.com/.test(url); }
+
+// One entry point for pasted links. Returns { places, departure } where
+// places[0] may be null (use the device's location) and departure may be null.
+export function parseLink(url) {
+  const trimmed = url.trim();
+  if (looksLikeGoogle(trimmed)) return { places: parseGoogleUrl(trimmed), departure: parseGoogleDeparture(trimmed), source: "google" };
+  if (looksLikeApple(trimmed)) return { places: parseAppleUrl(trimmed), departure: null, source: "apple" };
+  throw new Error("That doesn't look like a Google Maps or Apple Maps link.");
+}
+
+// Default time at a stop, by what the stop is. Tesla Superchargers get a
+// charging stop; everything else is a pass-through unless the user says so.
+export function defaultDwellMinutes(place) {
+  const name = (place && (place.name || place.query)) || "";
+  return /supercharger/i.test(name) || /\btesla\b/i.test(name) ? 15 : 0;
+}
 
 // ---------------------------------------------------------------- GPX / KML
 

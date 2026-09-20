@@ -59,8 +59,11 @@
     <div class="tab" id="tab-link">
       <div class="field">
         <label for="link">Google Maps or Apple Maps directions link</label>
-        <input id="link" type="url" placeholder="https://www.google.com/maps/dir/…  or  https://maps.apple.com/?saddr=…&daddr=…">
-        <p class="hint">Short <code>maps.app.goo.gl</code> links can't be expanded here. Open the link, then paste the full URL from the address bar.</p>
+        <div class="row tight">
+          <input id="link" type="url" placeholder="https://www.google.com/maps/dir/…  or  https://maps.apple.com/?daddr=…">
+          <button class="btn" id="import-link" type="button">Import</button>
+        </div>
+        <p class="hint">The link's places are copied into the A → B tab, where you can adjust stops and dwell times. Tesla Superchargers get 15 minutes by default. A link with no start uses your location. Short <code>maps.app.goo.gl</code> links can't be expanded here: open the link, then paste the full URL from the address bar.</p>
       </div>
     </div>
 

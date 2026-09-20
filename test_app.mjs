@@ -7,7 +7,7 @@ import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexB
 import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal } from "./js/tz.js";
 import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS } from "./js/finder.js";
 import { dwellBefore, applyDwell } from "./js/routing.js";
-import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture } from "./js/providers.js";
+import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes } from "./js/providers.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -335,6 +335,33 @@ test("Apple Maps link parses saddr and daddr", () => {
   const p = parseAppleUrl("https://maps.apple.com/?saddr=Salt+Lake+City&daddr=37.1,-113.58&dirflg=d");
   assert.equal(p[0].query, "Salt Lake City");
   assert.ok(Math.abs(p[1].lat - 37.1) < 1e-9);
+});
+test("links without a start yield a null origin (use the device location)", () => {
+  const g = parseGoogleUrl("https://www.google.com/maps/dir//Cedar+City,+UT/St.+George,+UT/@38.5,-112.3,8z/");
+  assert.equal(g[0], null);
+  assert.deepEqual(g.slice(1).map((x) => x.query), ["Cedar City, UT", "St. George, UT"]);
+  const a = parseAppleUrl("https://maps.apple.com/?daddr=St.+George,+UT&dirflg=d");
+  assert.equal(a[0], null);
+  assert.equal(a[1].query, "St. George, UT");
+});
+test("Apple daddr chains stops with ' to:'", () => {
+  const a = parseAppleUrl("https://maps.apple.com/?saddr=Boise&daddr=Twin+Falls+Supercharger+to:Provo,+UT");
+  assert.deepEqual(a.map((x) => x && x.query), ["Boise", "Twin Falls Supercharger", "Provo, UT"]);
+});
+test("parseLink routes to the right parser and carries the Google departure", () => {
+  const g = parseLink("https://www.google.com/maps/dir/A/B/data=!2m3!6e0!7e2!8j1790330400");
+  assert.equal(g.source, "google");
+  assert.equal(g.departure.getTime(), 1790330400 * 1000);
+  const a = parseLink("https://maps.apple.com/?daddr=B");
+  assert.equal(a.source, "apple");
+  assert.equal(a.departure, null);
+  assert.throws(() => parseLink("https://example.com/"), /doesn't look like/);
+});
+test("defaultDwellMinutes: Superchargers get 15, everything else 0", () => {
+  assert.equal(defaultDwellMinutes({ query: "Tesla Supercharger, Beaver, UT" }), 15);
+  assert.equal(defaultDwellMinutes({ name: "Beaver Supercharger" }), 15);
+  assert.equal(defaultDwellMinutes({ query: "Beaver, UT" }), 0);
+  assert.equal(defaultDwellMinutes(null), 0);
 });
 
 console.log(failed ? `\n${failed} FAILED, ${passed} passed` : `\nall ${passed} tests passed`);
