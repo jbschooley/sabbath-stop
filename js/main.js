@@ -311,6 +311,27 @@ async function importLink() {
   return fillForm(places, places.slice(1, -1).map((p) => defaultDwellMinutes(p) || ""), departure, "link");
 }
 
+// Empty every route input: from, stops, to, the pasted link, the chosen file,
+// the drive-time override and any per-leg times from an export.
+function clearRouteInputs() {
+  $("waypoints").innerHTML = "";
+  state.places = { origin: null, destination: null, waypoints: [], dwellMin: [] };
+  state.planLegSeconds = null;
+  $("origin").value = "";
+  $("destination").value = "";
+  $("link").value = "";
+  $("file").value = "";
+  $("traffic-h").value = "";
+  $("traffic-m").value = "";
+  $("traffic-includes-stops").checked = false;
+  showFieldError("link-error", "");
+  showFieldError("file-error", "");
+  clearResults();
+  if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+  saveRouteInput();
+  setStatus("Route cleared.");
+}
+
 // Put a list of places into the A -> B form. places[0] / last may be null
 // (unknown start / end). dwellMins lines up with the intermediate stops.
 function fillForm(places, dwellMins, departure, sourceWord) {
@@ -845,6 +866,12 @@ function escapeAttr(s) { return escapeHtml(s); }
 function boot() {
   $("departure").value = initialDepartureLocal();
   $("departure").addEventListener("change", () => saveDeparture($("departure").value));
+  $("reset-departure").addEventListener("click", () => {
+    try { localStorage.removeItem(DEPART_KEY); } catch { /* ignore */ }
+    $("departure").value = defaultDepartureLocal();
+    setStatus("Departure reset to the default.");
+  });
+  $("clear-route").addEventListener("click", clearRouteInputs);
   initMap();
   bindTabs();
   bindFilters();
