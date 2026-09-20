@@ -72,7 +72,8 @@ CLUSTERS = "https://maps.churchofjesuschrist.org/api/maps-proxy/v2/locations/clu
 RESOLVE_ZOOM = 20.0
 
 # Keep each request's response to a sane size. Utah (5x5) returned ~735 KB in
-# one call, so 4 degrees is comfortable.
+# one call, so 4 degrees is comfortable for the Americas. Sparse continents
+# set a larger "verifyStep" in regions.json so the sweep stays cheap.
 STEP_DEG = 4.0
 
 
@@ -110,11 +111,12 @@ def collect(regions: list[dict], names: list[str], limiter: RateLimiter):
         if r["name"] not in names:
             continue
         min_lng, min_lat, max_lng, max_lat = r["bbox"]
+        step = float(r.get("verifyStep", STEP_DEG))
         lng = min_lng
         while lng < max_lng:
             lat = min_lat
             while lat < max_lat:
-                ext = (lng, lat, min(lng + STEP_DEG, max_lng), min(lat + STEP_DEG, max_lat))
+                ext = (lng, lat, min(lng + step, max_lng), min(lat + step, max_lat))
                 recs = fetch_clusters(ext, limiter)
                 calls += 1
                 for c in recs:
@@ -133,8 +135,8 @@ def collect(regions: list[dict], names: list[str], limiter: RateLimiter):
                             where[ident] = (float(cc[0]), float(cc[1]))
                 print(f"  {ext} -> {len(recs)} recs (buildings {len(buildings)}, units {len(units)})",
                       flush=True)
-                lat += STEP_DEG
-            lng += STEP_DEG
+                lat += step
+            lng += step
 
     return buildings, units, where, unresolved, calls
 

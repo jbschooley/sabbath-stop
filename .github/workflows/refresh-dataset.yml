@@ -57,8 +57,9 @@ jobs:
         run: python3 verify.py --max-missing 5
 
       # min-buildings guards against a partial or degraded harvest silently
-      # replacing a good dataset. The first full run (2026-09-20, CONUS +
-      # Alaska + Hawaii) found 7,442 buildings; the floor sits a little below.
+      # replacing a good dataset. The first US-only run (2026-09-20) found
+      # 7,442 buildings. The defaults now cover the world; raise this floor
+      # to a little under the first worldwide count once it is known.
       - name: Build tiles
         run: python3 build_tiles.py --gzip --min-buildings 7000
 

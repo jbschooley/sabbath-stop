@@ -8,9 +8,13 @@ Public repo, deployed to GitHub Pages. Static site, no backend.
 ## State
 
 - **Data layer: done and verified.** `harvest.py`, `verify.py`,
-  `build_tiles.py`, `test_harvest.py`, monthly Actions refresh.
-- **App layer: not started.** Fully specified in `APP_SPEC.md` — read it
-  before writing app code.
+  `build_tiles.py`, `test_harvest.py`, monthly Actions refresh. Default
+  regions cover the world.
+- **App layer: live** at https://jbschooley.github.io/sabbath-stop/ (GitHub
+  Pages from `main`). `index.html`, `js/`, `css/`; tests in `test_app.mjs`
+  (`node test_app.mjs`). Every deploy must bump the version stamp in
+  `index.html` (the `?v=` on the stylesheet, the import map, and the module
+  script) or phones keep the old scripts for ten minutes.
 - **The locator API requires an `Origin` header for its own site** or it
   returns 401. `harvest.py` and `verify.py` send it. Preflight and the
   `utah-test` harvest were run successfully with it on 2026-09-20.

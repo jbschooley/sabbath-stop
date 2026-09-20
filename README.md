@@ -31,8 +31,8 @@ and I will change or stop it.
 
 ## Using it
 
-The app is being built against the design in [`APP_SPEC.md`](APP_SPEC.md).
-What follows describes that design.
+The app is live at <https://jbschooley.github.io/sabbath-stop/>. It follows
+the design in [`APP_SPEC.md`](APP_SPEC.md).
 
 1. **Give it a route.** Type a start and a destination, add stops if you
    like, or paste an Apple Maps link or an expanded Google Maps directions
@@ -85,8 +85,8 @@ tiles your route touches.
 A GitHub Actions workflow re-harvests on the first of each month and commits
 the new `data/` if anything changed. You can also start it by hand from the
 Actions tab. The `regions` input takes space-separated names from
-`regions.json`; leave it blank for the defaults (continental US, Alaska,
-Hawaii) or pass `utah-test` for a quick validation run.
+`regions.json`; leave it blank for the defaults, which cover the whole world
+in continent-sized boxes, or pass `utah-test` for a quick validation run.
 
 ### If it grows
 

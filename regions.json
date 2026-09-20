@@ -19,15 +19,71 @@
   },
   {
     "name": "canada",
-    "description": "Canada. Opt in with --only; roughly doubles runtime.",
+    "description": "Canada",
     "bbox": [-141.0, 41.5, -52.0, 70.0],
-    "default": false
+    "default": true
   },
   {
     "name": "mexico",
-    "description": "Mexico. Opt in with --only.",
+    "description": "Mexico",
     "bbox": [-118.5, 14.0, -86.0, 33.0],
-    "default": false
+    "default": true
+  },
+  {
+    "name": "central-america-caribbean",
+    "description": "Central America and the Caribbean",
+    "bbox": [-93.0, 6.0, -58.0, 28.0],
+    "default": true,
+    "verifyStep": 8
+  },
+  {
+    "name": "south-america",
+    "description": "South America",
+    "bbox": [-92.0, -57.0, -33.0, 13.0],
+    "default": true,
+    "verifyStep": 8
+  },
+  {
+    "name": "europe",
+    "description": "Europe, including Iceland and the western edge of Russia",
+    "bbox": [-25.0, 34.0, 45.0, 72.0],
+    "default": true,
+    "verifyStep": 8
+  },
+  {
+    "name": "africa",
+    "description": "Africa and the Middle East west of Iran",
+    "bbox": [-20.0, -36.0, 52.0, 38.0],
+    "default": true,
+    "verifyStep": 8
+  },
+  {
+    "name": "asia-west",
+    "description": "Iran to Bangladesh, Central Asia, western Siberia",
+    "bbox": [45.0, 5.0, 100.0, 78.0],
+    "default": true,
+    "verifyStep": 8
+  },
+  {
+    "name": "asia-east",
+    "description": "Southeast and East Asia, Japan, the Philippines, eastern Siberia",
+    "bbox": [100.0, -11.0, 180.0, 78.0],
+    "default": true,
+    "verifyStep": 8
+  },
+  {
+    "name": "australia-nz",
+    "description": "Australia, New Zealand and Melanesia",
+    "bbox": [110.0, -50.0, 180.0, -8.0],
+    "default": true,
+    "verifyStep": 8
+  },
+  {
+    "name": "pacific-east",
+    "description": "Polynesia east of the dateline: Tonga, Samoa, Cook Islands, French Polynesia",
+    "bbox": [-180.0, -30.0, -130.0, 30.0],
+    "default": true,
+    "verifyStep": 8
   },
   {
     "name": "utah-test",
