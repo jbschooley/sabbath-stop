@@ -81,19 +81,6 @@ export function defaultDepartureLocal(now = new Date()) {
   return toDatetimeLocal(d);
 }
 
-// Accepts "5h 20m", "5:20", "320", "320 min", "5.5h". Returns seconds or null.
-export function parseDuration(text) {
-  const s = (text || "").trim().toLowerCase();
-  if (!s) return null;
-  let m;
-  if ((m = /^(\d+):(\d{1,2})$/.exec(s))) return (+m[1] * 60 + +m[2]) * 60;
-  let total = 0, matched = false;
-  if ((m = /(\d+(?:\.\d+)?)\s*h/.exec(s))) { total += parseFloat(m[1]) * 3600; matched = true; }
-  if ((m = /(\d+(?:\.\d+)?)\s*m/.exec(s))) { total += parseFloat(m[1]) * 60; matched = true; }
-  if (!matched && /^\d+(?:\.\d+)?$/.test(s)) { total = parseFloat(s) * 60; matched = true; }
-  return matched && total > 0 ? total : null;
-}
-
 export function toDatetimeLocal(d) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;

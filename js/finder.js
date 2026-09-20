@@ -11,6 +11,7 @@
 //   6. exact arrival, delta, score, sort
 
 import { bufferBbox, tilesForBbox, VertexBuckets } from "./geo.js";
+import { dwellBefore } from "./routing.js";
 import { meetingStartInstant } from "./tz.js";
 
 export const IDEAL_EARLY = 12; // minutes before start
@@ -30,13 +31,13 @@ export const BATCH_SPAN_MI = 60; // keeps every pair inside the 150 km matrix li
 
 export const DEFAULT_FILTERS = {
   subtypes: [],          // codes; empty = nothing selected -> prompt the user
-  maxDetourMin: 10,
-  windowMin: -15,        // minutes relative to start; negative = early
-  windowMax: 2,
+  maxDetourMin: 30,
+  windowMin: -60,        // minutes relative to start; negative = early
+  windowMax: 10,
   wide: false,
   wideHours: 2,
   showFlagged: false,    // units with data-quality flags are hidden unless asked for
-  sort: "best",          // best | arrival | distance
+  sort: "best",          // best | arrival | earliest | distance
 };
 
 // How far off the route a building may sit before we skip even the coarse
@@ -69,6 +70,15 @@ export function sortCandidates(list, mode) {
       const lb = b.deltaMinutes === null ? 2 : b.deltaMinutes > 0 ? 1 : 0;
       if (la !== lb) return la - lb;
       return (a.deltaMinutes ?? 0) - (b.deltaMinutes ?? 0);
+    });
+  } else if (mode === "earliest") {
+    // Earliest meeting start first; unknown times last; ties by how far off
+    // the route the building sits.
+    arr.sort((a, b) => {
+      const ta = a.startInstant ? a.startInstant.getTime() : Infinity;
+      const tb = b.startInstant ? b.startInstant.getTime() : Infinity;
+      if (ta !== tb) return ta - tb;
+      return (a.offRouteMiles ?? 0) - (b.offRouteMiles ?? 0);
     });
   } else if (mode === "distance") {
     arr.sort((a, b) => a.milesAlongRoute - b.milesAlongRoute);
@@ -192,11 +202,13 @@ export async function findCandidates(route, filters, deps) {
   let done = 0;
   const total = jobs.length;
 
-  const applyResult = (job, detourSec, toBuildingSec, exitIndex) => {
+  // detourSec and toBuildingSec are unscaled driving seconds; extraSec is
+  // clock time that is not driving (dwell at earlier stops) and is not scaled.
+  const applyResult = (job, detourSec, toBuildingSec, exitIndex, extraSec = 0) => {
     for (const c of job.cands) {
       c.routed = true;
       c.detourMinutes = Math.max(0, (detourSec * scale) / 60);
-      c.arrivalAtBuilding = new Date(route.departure.getTime() + (pts[exitIndex].t + toBuildingSec * scale) * 1000);
+      c.arrivalAtBuilding = new Date(route.departure.getTime() + (pts[exitIndex].t + toBuildingSec * scale + extraSec) * 1000);
       if (c.startInstant) c.deltaMinutes = (c.arrivalAtBuilding - c.startInstant) / 60000;
     }
   };
@@ -208,8 +220,9 @@ export async function findCandidates(route, filters, deps) {
     places.splice(job.legIndex + 1, 0, { name: job.building.name, lng: job.building.lng, lat: job.building.lat });
     const r = await routeDetour(places, { departure: route.departure });
     const toBuilding = r.legSeconds.slice(0, job.legIndex + 1).reduce((a, s) => a + s, 0);
-    // arrival = departure + toBuilding: express it as exit at vertex 0.
-    applyResult(job, r.totalSeconds - route.totalSeconds / scale, toBuilding, 0);
+    const driveSeconds = route.driveSeconds ?? route.totalSeconds / scale;
+    // arrival = departure + drive to building + dwell at stops passed on the way.
+    applyResult(job, r.totalSeconds - driveSeconds, toBuilding, 0, dwellBefore(route.places, job.legIndex));
   };
 
   const detourByMatrix = async (batch) => {

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Sabbath Stop</title>
   <meta name="description" content="Find a ward to attend along your driving route, filtered by unit type, detour cost, and arrival time relative to sacrament meeting.">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
@@ -22,9 +22,12 @@
       <p class="hint">Every arrival time depends on this. Defaults to right now and remembers a future time you set. A Google Maps link with "depart at" fills it in; Apple Maps links carry no time.</p>
     </div>
     <div class="field">
-      <label for="traffic-time">Drive time from Google or Apple Maps (optional)</label>
-      <input id="traffic-time" type="text" placeholder="e.g. 5h 20m" inputmode="numeric">
-      <p class="hint">The free router has no traffic data. If Maps predicts a different total for this departure, enter it and every arrival and detour is scaled to match.</p>
+      <label for="traffic-h">Drive time from Google or Apple Maps (optional)</label>
+      <div class="row tight duration">
+        <input id="traffic-h" type="number" min="0" max="99" step="1" placeholder="h" inputmode="numeric" aria-label="Hours"><span>h</span>
+        <input id="traffic-m" type="number" min="0" max="59" step="1" placeholder="min" inputmode="numeric" aria-label="Minutes"><span>min</span>
+      </div>
+      <p class="hint">The free router has no traffic data. If Maps predicts a different total driving time for this departure, enter it and every arrival and detour is scaled to match. Don't include time at stops.</p>
     </div>
 
     <h2>Route</h2>
@@ -50,6 +53,7 @@
         <ul id="destination-suggest" hidden></ul>
       </div>
       <button class="btn small" id="add-waypoint">+ Add a stop</button>
+      <p class="hint">Each stop can carry a dwell time, so a 40-minute charge pushes every later arrival back 40 minutes.</p>
     </div>
 
     <div class="tab" id="tab-link">
@@ -81,6 +85,7 @@
           <select id="sort">
             <option value="best">Best fit</option>
             <option value="arrival">Arrival before start</option>
+            <option value="earliest">Earliest meeting first</option>
             <option value="distance">Distance along route</option>
           </select>
         </div>

@@ -28,6 +28,25 @@ export async function matrix(sources, targets, { departure } = {}) {
   return json.sources_to_targets.map((row) => row.map((cell) => (cell && cell.time != null ? cell.time : null)));
 }
 
+// Time spent at intermediate stops. places[k].dwellSeconds is how long you
+// stay at stop k (origin and destination carry none). dwellBefore(legIndex)
+// is the dwell accumulated before you start driving leg legIndex.
+export function dwellBefore(places, legIndex) {
+  let s = 0;
+  for (let k = 1; k <= legIndex && k < places.length - 1; k++) s += places[k].dwellSeconds || 0;
+  return s;
+}
+
+// Turn pure driving times into clock times: t = drive * scale + dwell before
+// this leg. Keeps `drive` on each point so the scale can be reapplied.
+export function applyDwell(points, places, scale = 1) {
+  for (const p of points) {
+    if (p.drive === undefined) p.drive = p.t;
+    p.t = p.drive * scale + dwellBefore(places, p.leg);
+  }
+  return points;
+}
+
 const CACHE_PREFIX = "ss:route:";
 const CACHE_MAX_ENTRIES = 12;
 const CACHE_MAX_BYTES = 1_500_000;

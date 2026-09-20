@@ -33,7 +33,9 @@ button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 
 .app { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; height: 100%; }
-.panel { overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 16px; }
+.panel { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; min-width: 0; background: var(--panel); border-right: 1px solid var(--line); padding: 16px; }
+.panel > * { max-width: 100%; }
+body { overflow-x: hidden; }
 .map { min-height: 300px; }
 #map { width: 100%; height: 100%; }
 
@@ -82,6 +84,10 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 .suggest li .kind { color: var(--muted); font-size: 12px; margin-left: 6px; }
 
 .waypoints .row { margin-bottom: 6px; }
+.waypoints input.dwell { width: 64px; flex: 0 0 auto; padding: 8px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.waypoints .unit { font-size: 12.5px; color: var(--muted); flex: 0 0 auto; }
+.duration input[type="number"] { width: 72px; flex: 0 0 auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.duration span { color: var(--muted); font-size: 13px; }
 
 .hint { font-size: 12.5px; color: var(--muted); margin: 4px 0 0; }
 .warn { color: var(--warn); }

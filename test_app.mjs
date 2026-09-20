@@ -4,8 +4,9 @@
 
 import assert from "node:assert/strict";
 import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexBuckets } from "./js/geo.js";
-import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, parseDuration, defaultDepartureLocal } from "./js/tz.js";
-import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute } from "./js/finder.js";
+import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal } from "./js/tz.js";
+import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS } from "./js/finder.js";
+import { dwellBefore, applyDwell } from "./js/routing.js";
 import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture } from "./js/providers.js";
 
 let passed = 0, failed = 0;
@@ -101,14 +102,20 @@ test("meeting start resolves on the arrival's calendar day in the building's zon
 test("Arizona has no DST", () => {
   assert.equal(zonedToInstant(2026, 7, 5, 9, 0, "America/Phoenix").toISOString(), "2026-07-05T16:00:00.000Z");
 });
-test("parseDuration accepts the common shapes", () => {
-  assert.equal(parseDuration("5h 20m"), 19200);
-  assert.equal(parseDuration("5:20"), 19200);
-  assert.equal(parseDuration("320"), 19200);
-  assert.equal(parseDuration("320 min"), 19200);
-  assert.equal(parseDuration("5.5h"), 19800);
-  assert.equal(parseDuration(""), null);
-  assert.equal(parseDuration("soon"), null);
+test("dwellBefore sums stops passed before a leg; origin and destination carry none", () => {
+  const places = [{ name: "A" }, { name: "S1", dwellSeconds: 600 }, { name: "S2", dwellSeconds: 1800 }, { name: "B", dwellSeconds: 9999 }];
+  assert.equal(dwellBefore(places, 0), 0);
+  assert.equal(dwellBefore(places, 1), 600);
+  assert.equal(dwellBefore(places, 2), 2400);
+  assert.equal(dwellBefore(places, 3), 2400, "destination dwell never counts");
+});
+test("applyDwell shifts later legs and keeps drive so a scale can be reapplied", () => {
+  const places = [{ name: "A" }, { name: "S", dwellSeconds: 1200 }, { name: "B" }];
+  const pts = [{ t: 0, leg: 0 }, { t: 100, leg: 0 }, { t: 100, leg: 1 }, { t: 300, leg: 1 }];
+  applyDwell(pts, places);
+  assert.deepEqual(pts.map((p) => p.t), [0, 100, 1300, 1500]);
+  applyDwell(pts, places, 2);
+  assert.deepEqual(pts.map((p) => p.t), [0, 200, 1400, 1800], "dwell is not scaled, driving is");
 });
 test("default departure is now, rounded up to five minutes", () => {
   assert.equal(defaultDepartureLocal(new Date(2026, 8, 20, 15, 3, 40)), "2026-09-20T15:05");
@@ -149,6 +156,21 @@ test("sortCandidates: arrival mode puts late and unknown last", () => {
   assert.deepEqual(sortCandidates(list, "arrival").map((c) => c.deltaMinutes), [-20, -3, 5, null]);
   assert.deepEqual(sortCandidates(list, "distance").map((c) => c.milesAlongRoute), [1, 2, 3, 4]);
 });
+test("sortCandidates: earliest mode orders by meeting start, then off-route distance, unknown last", () => {
+  const at = (h) => new Date(Date.UTC(2026, 8, 27, h));
+  const list = [
+    { id: "noon-far", startInstant: at(18), offRouteMiles: 3 },
+    { id: "unknown", startInstant: null, offRouteMiles: 0 },
+    { id: "nine", startInstant: at(15), offRouteMiles: 2 },
+    { id: "noon-near", startInstant: at(18), offRouteMiles: 1 },
+  ];
+  assert.deepEqual(sortCandidates(list, "earliest").map((c) => c.id), ["nine", "noon-near", "noon-far", "unknown"]);
+});
+test("defaults: 30 min detour, arrive 60 early to 10 late", () => {
+  assert.equal(DEFAULT_FILTERS.maxDetourMin, 30);
+  assert.equal(DEFAULT_FILTERS.windowMin, -60);
+  assert.equal(DEFAULT_FILTERS.windowMax, 10);
+});
 test("detour radius has a floor and grows with the budget", () => {
   assert.equal(detourRadiusMiles(1), 3);
   assert.ok(detourRadiusMiles(60) > detourRadiusMiles(10));
@@ -176,7 +198,7 @@ function fixture() {
   for (let i = 0; i <= 100; i++) points.push({ lng: -112 + i * 0.01, lat: 40, t: i * 36, d: i * 0.53, leg: 0 });
   const departure = new Date("2026-09-27T14:00:00Z"); // 08:00 MDT
   const route = {
-    departure, points, bbox: [-112, 40, -111, 40], totalSeconds: 3600, totalMiles: 53,
+    departure, points, bbox: [-112, 40, -111, 40], driveSeconds: 3600, dwellSeconds: 0, totalSeconds: 3600, timeScale: 1, totalMiles: 53,
     places: [{ name: "A", lng: -112, lat: 40 }, { name: "B", lng: -111, lat: 40 }], legSeconds: [3600],
   };
   const building = (id, lng, lat, units) => ({ id, name: id, lng, lat, tz: "America/Denver", city: "X", state: "UT", units });
@@ -250,9 +272,36 @@ await atest("findCandidates: a failing matrix batch falls back to a full re-rout
   assert.ok(Math.abs(mid.deltaMinutes + 14.5) < 0.01, String(mid.deltaMinutes));
 });
 
+await atest("findCandidates: dwell at an earlier stop delays arrival in both timing paths", async () => {
+  // Same route, but a stop at the 25% mark with a 30-minute dwell.
+  const { route, tile, filters } = fixture();
+  route.places = [route.places[0], { name: "S", lng: -111.75, lat: 40, dwellSeconds: 1800 }, route.places[1]];
+  route.points.forEach((p, i) => { p.leg = i < 25 ? 0 : 1; });
+  applyDwell(route.points, route.places);
+  route.dwellSeconds = 1800; route.totalSeconds = 5400; route.legSeconds = [900, 2700];
+  const wide = { ...filters, windowMin: -120, windowMax: 120 };
+  const leg = (haversineMi(-111.5, 40, -111.5, 40.01) / 30) * 60;
+
+  const viaMatrix = await findCandidates(route, wide, { loadTile: async () => tile, matrix: fakeMatrix, concurrency: 1 });
+  const m = viaMatrix.find((c) => c.unit.id === "u1");
+  // arrival = 08:00 + 1800 s drive + 1800 s dwell + leg -> 09:00 + leg; start 08:45
+  assert.ok(Math.abs(m.deltaMinutes - (15 + leg)) < 0.05, `matrix: ${m.deltaMinutes}`);
+
+  const viaRoute = await findCandidates(route, wide, {
+    loadTile: async () => tile,
+    matrix: async () => { throw new Error("no"); },
+    routeDetour: async () => ({ legSeconds: [900, 930, 1830], totalSeconds: 3660 }),
+    concurrency: 1,
+  });
+  const r = viaRoute.find((c) => c.unit.id === "u1");
+  // arrival = 08:00 + (900 + 930) s drive + 1800 s dwell = 09:00:30; detour 60 s
+  assert.ok(Math.abs(r.deltaMinutes - 15.5) < 0.01, `route: ${r.deltaMinutes}`);
+  assert.equal(Math.round(r.detourMinutes), 1);
+});
+
 await atest("findCandidates: traffic scale applies to matrix legs too", async () => {
   const { route, tile, filters } = fixture();
-  route.timeScale = 2; route.totalSeconds *= 2; route.points.forEach((p) => (p.t *= 2));
+  route.timeScale = 2; route.totalSeconds *= 2; applyDwell(route.points, route.places, 2);
   const deps = { loadTile: async () => tile, matrix: fakeMatrix, concurrency: 1 };
   const out = await findCandidates(route, { ...filters, windowMin: -120, windowMax: 120 }, deps);
   const mid = out.find((c) => c.unit.id === "u1");

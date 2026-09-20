@@ -4,11 +4,11 @@
 import { DEFAULT_FILTERS, findCandidates, reapply } from "./finder.js";
 import { debounce, reverse, suggest } from "./geocode.js";
 import { fromAppleUrl, fromGoogleUrl, fromPlaces, fromTrackFile, looksLikeApple, looksLikeGoogle } from "./providers.js";
-import { matrix, routePlaces } from "./routing.js";
-import { defaultDepartureLocal, fmtDateTime, fmtHHMM, parseDuration, toDatetimeLocal, tzAbbrev } from "./tz.js";
+import { applyDwell, matrix, routePlaces } from "./routing.js";
+import { defaultDepartureLocal, fmtDateTime, fmtHHMM, toDatetimeLocal, tzAbbrev } from "./tz.js";
 
 const $ = (id) => document.getElementById(id);
-const FILTERS_KEY = "ss:filters";
+const FILTERS_KEY = "ss:filters:v2"; // bumped when defaults change so they take effect
 const DEPART_KEY = "ss:departure";
 const ROUTE_INPUT_KEY = "ss:route-input";
 const TOP_SUBTYPES = ["CONVENTIONAL", "YSA", "YSA_JR", "YSA_SR", "SPANISH", "STUDENT_MARRIED"];
@@ -19,7 +19,7 @@ const state = {
   route: null,
   candidates: [],
   selectedId: null,
-  places: { origin: null, destination: null, waypoints: [] },
+  places: { origin: null, destination: null, waypoints: [], dwellMin: [] },
   manifest: null,
   subtypes: [],
   tileCache: new Map(),
@@ -58,9 +58,14 @@ function saveRouteInput() {
       origin: state.places.origin,
       destinationText: $("destination").value,
       destination: state.places.destination,
-      waypoints: rows.map((row, i) => ({ text: row.querySelector("input").value, place: state.places.waypoints[row.dataset.idx] || null })),
+      waypoints: rows.map((row) => ({
+        text: row.querySelector("input[type=text]").value,
+        place: state.places.waypoints[row.dataset.idx] || null,
+        dwellMin: row.querySelector("input.dwell").value,
+      })),
       link: $("link").value,
-      trafficTime: $("traffic-time").value,
+      trafficH: $("traffic-h").value,
+      trafficM: $("traffic-m").value,
     };
     localStorage.setItem(ROUTE_INPUT_KEY, JSON.stringify(snap));
   } catch { /* ignore */ }
@@ -73,9 +78,10 @@ function restoreRouteInput() {
   state.places.origin = snap.origin || null;
   $("destination").value = snap.destinationText || "";
   state.places.destination = snap.destination || null;
-  for (const w of snap.waypoints || []) addWaypointRow(w.place, w.text);
+  for (const w of snap.waypoints || []) addWaypointRow(w.place, w.text, w.dwellMin);
   $("link").value = snap.link || "";
-  $("traffic-time").value = snap.trafficTime || "";
+  $("traffic-h").value = snap.trafficH || "";
+  $("traffic-m").value = snap.trafficM || "";
   if (snap.mode && snap.mode !== "ab") {
     const btn = document.querySelector(`[role="tab"][data-tab="${snap.mode}"]`);
     if (btn) btn.click();
@@ -221,17 +227,24 @@ function attachSuggest(input, list, onPick) {
   input.addEventListener("blur", () => setTimeout(close, 150));
 }
 
-function addWaypointRow(prefill, text) {
+function addWaypointRow(prefill, text, dwellMin) {
   const wrap = $("waypoints");
   const idx = state.places.waypoints.length;
   state.places.waypoints.push(prefill || null);
+  state.places.dwellMin.push(parseFloat(dwellMin) || 0);
   const row = document.createElement("div");
   row.className = "field suggest";
   row.dataset.idx = idx;
-  row.innerHTML = `<label>Via</label><div class="row tight"><input type="text" placeholder="Optional stop" autocomplete="off"><button class="btn icon" title="Remove" aria-label="Remove stop">×</button></div><ul hidden></ul>`;
-  const input = row.querySelector("input"), list = row.querySelector("ul");
+  row.innerHTML = `<label>Via</label><div class="row tight">
+      <input type="text" placeholder="Optional stop" autocomplete="off">
+      <input type="number" class="dwell" min="0" max="600" step="5" placeholder="0" inputmode="numeric" title="Minutes at this stop" aria-label="Minutes at this stop"><span class="unit">min</span>
+      <button class="btn icon" title="Remove" aria-label="Remove stop">×</button>
+    </div><ul hidden></ul>`;
+  const input = row.querySelector("input[type=text]"), list = row.querySelector("ul"), dwell = row.querySelector("input.dwell");
   input.value = text ?? (prefill ? prefill.name : "");
+  if (dwellMin) dwell.value = dwellMin;
   attachSuggest(input, list, (p) => { state.places.waypoints[idx] = p; });
+  dwell.addEventListener("change", () => { state.places.dwellMin[idx] = Math.max(0, parseFloat(dwell.value) || 0); saveRouteInput(); });
   row.querySelector("button").addEventListener("click", () => { state.places.waypoints[idx] = undefined; row.remove(); saveRouteInput(); });
   wrap.appendChild(row);
 }
@@ -288,23 +301,33 @@ async function buildRoute() {
   const o = state.places.origin || ($("origin").value.trim() ? { query: $("origin").value.trim() } : null);
   const d = state.places.destination || ($("destination").value.trim() ? { query: $("destination").value.trim() } : null);
   if (!o || !d) throw new Error("Enter where you're starting and where you're going.");
-  const vias = state.places.waypoints.filter(Boolean);
+  const vias = state.places.waypoints
+    .map((p, i) => (p ? { ...p, dwellSeconds: (state.places.dwellMin[i] || 0) * 60 } : null))
+    .filter(Boolean);
   return fromPlaces([o, ...vias, d], departure);
 }
 
 // ---------------------------------------------------------------- traffic
 
+function readTrafficSeconds() {
+  const h = parseFloat($("traffic-h").value) || 0;
+  const m = parseFloat($("traffic-m").value) || 0;
+  const s = h * 3600 + m * 60;
+  return s > 0 ? s : null;
+}
+
 // The free router has no traffic. If the user tells us what Google or Apple
-// predicts for this departure, scale every cumulative time to match. Detour
-// legs get the same factor inside the finder.
+// predicts for this departure, scale every driving time to match. Dwell at
+// stops is clock time, not driving, and is left alone. Detour legs get the
+// same factor inside the finder.
 function applyTrafficTime(route) {
-  const wanted = parseDuration($("traffic-time").value);
-  if (!wanted || !route.totalSeconds || route.source === "gpx" && route.provider === "file") { route.timeScale = 1; return; }
-  const scale = wanted / route.totalSeconds;
+  const wanted = readTrafficSeconds();
+  if (!wanted || !route.driveSeconds || route.provider === "file") { route.timeScale = 1; return; }
+  const scale = wanted / route.driveSeconds;
   if (scale < 0.5 || scale > 3) { setStatus("That drive time is far from the routed one; ignoring it.", true); route.timeScale = 1; return; }
   route.timeScale = scale;
-  route.totalSeconds = wanted;
-  for (const p of route.points) p.t *= scale;
+  route.totalSeconds = wanted + (route.dwellSeconds || 0);
+  applyDwell(route.points, route.places, scale);
   route.legSeconds = route.legSeconds.map((s) => s * scale);
 }
 
@@ -327,8 +350,9 @@ async function go() {
     state.route = route;
     drawRoute(route);
     const scaled = route.timeScale && route.timeScale !== 1 ? ` (scaled ×${route.timeScale.toFixed(2)} to your Maps time)` : "";
+    const dwell = route.dwellSeconds ? ` plus ${fmtDuration(route.dwellSeconds)} at stops` : "";
     const fromLink = route.departureFromLink ? " Departure taken from the link." : "";
-    setStatus(`Route: ${route.totalMiles.toFixed(0)} mi, ${fmtDuration(route.totalSeconds)} via ${route.provider}${scaled}.${fromLink} Finding wards…`);
+    setStatus(`Route: ${route.totalMiles.toFixed(0)} mi, ${fmtDuration(route.totalSeconds - (route.dwellSeconds || 0))} driving${dwell} via ${route.provider}${scaled}.${fromLink} Finding wards…`);
     const candidates = await findCandidates(route, state.filters, {
       loadTile,
       matrix,
@@ -573,7 +597,8 @@ function boot() {
   $("add-waypoint").addEventListener("click", () => { addWaypointRow(); saveRouteInput(); });
   $("use-location").addEventListener("click", useMyLocation);
   $("link").addEventListener("input", saveRouteInput);
-  $("traffic-time").addEventListener("change", saveRouteInput);
+  $("traffic-h").addEventListener("change", saveRouteInput);
+  $("traffic-m").addEventListener("change", saveRouteInput);
   restoreRouteInput();
   $("go").addEventListener("click", go);
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "text") go(); });

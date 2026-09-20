@@ -6,17 +6,22 @@
 
 import { bboxOf, haversineMi } from "./geo.js";
 import { geocodeOne } from "./geocode.js";
-import { routePlaces } from "./routing.js";
+import { applyDwell, dwellBefore, routePlaces } from "./routing.js";
 
 // ---------------------------------------------------------------- shared
 
 async function routeThrough(source, places, departure) {
   const r = await routePlaces(places, { departure });
+  const points = applyDwell(r.points.map((p) => ({ ...p })), places);
+  const dwellSeconds = dwellBefore(places, places.length - 2);
   return {
     source, departure,
-    points: r.points,
-    bbox: bboxOf(r.points),
-    totalSeconds: r.totalSeconds,
+    points,
+    bbox: bboxOf(points),
+    driveSeconds: r.totalSeconds,          // pure driving, unscaled
+    dwellSeconds,
+    totalSeconds: r.totalSeconds + dwellSeconds,
+    timeScale: 1,
     totalMiles: r.totalMiles,
     legSeconds: r.legSeconds,
     places,
@@ -184,7 +189,8 @@ export async function fromTrackFile(text, filename, departure) {
     let d = 0;
     track.forEach((p, i) => {
       if (i > 0) d += haversineMi(track[i - 1].lng, track[i - 1].lat, p.lng, p.lat);
-      points.push({ lng: p.lng, lat: p.lat, t: (p.time - t0) / 1000, d, leg: 0 });
+      const t = (p.time - t0) / 1000;
+      points.push({ lng: p.lng, lat: p.lat, t, drive: t, d, leg: 0 });
     });
     const places = [
       { name: "Start", lng: track[0].lng, lat: track[0].lat },
@@ -193,8 +199,8 @@ export async function fromTrackFile(text, filename, departure) {
     const last = points[points.length - 1];
     return {
       source: "gpx", departure: departure || new Date(t0),
-      points, bbox: bboxOf(points), totalSeconds: last.t, totalMiles: last.d,
-      legSeconds: [last.t], places, provider: "file",
+      points, bbox: bboxOf(points), driveSeconds: last.t, dwellSeconds: 0, totalSeconds: last.t, timeScale: 1,
+      totalMiles: last.d, legSeconds: [last.t], places, provider: "file",
     };
   }
 
