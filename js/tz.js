@@ -50,6 +50,14 @@ export function meetingStartInstant(arrival, startHHMM, tz) {
   return zonedToInstant(p.y, p.m, p.d, hh, mm, tz);
 }
 
+const WEEKDAYS = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+
+// Day of the week of an instant, in tz, as the locator spells it ("SUNDAY").
+export function weekdayIn(date, tz) {
+  const name = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long" }).format(date).toUpperCase();
+  return WEEKDAYS.includes(name) ? name : name;
+}
+
 export function tzAbbrev(date, tz) {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(date);
   return (parts.find((p) => p.type === "timeZoneName") || {}).value || tz;
@@ -86,6 +94,21 @@ export function defaultDepartureLocal(now = new Date()) {
   d.setDate(d.getDate() + (7 - d.getDay()));
   d.setHours(8, 0, 0, 0);
   return toDatetimeLocal(d);
+}
+
+// The wall clock of an instant in tz, as a value for <input type=datetime-local>.
+export function wallClockValue(instant, tz) {
+  const p = localParts(instant, tz);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${p.y}-${pad(p.m)}-${pad(p.d)}T${pad(p.hh)}:${pad(p.mm)}`;
+}
+
+// The instant a datetime-local value ("YYYY-MM-DDTHH:MM") denotes when read as
+// wall-clock time in tz.
+export function instantFromWallClock(value, tz) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value || "");
+  if (!m) return null;
+  return zonedToInstant(+m[1], +m[2], +m[3], +m[4], +m[5], tz);
 }
 
 export function toDatetimeLocal(d) {

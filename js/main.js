@@ -2,11 +2,12 @@
 // modules that know nothing about the DOM.
 
 import { DEFAULT_FILTERS, findCandidates, reapply } from "./finder.js";
-import { debounce, reverse, suggest } from "./geocode.js";
+import { debounce, geocodeOne, reverse, suggest } from "./geocode.js";
 import { isUnresolvableName, looksLikeXlsx, parseAbrpXlsx } from "./abrp.js";
+import { bufferBbox, haversineMi, tilesForBbox } from "./geo.js";
 import { defaultDwellMinutes, fromPlaces, fromTrackFile, looksLikeAbrpFile, parseLink } from "./providers.js";
 import { applyDwell, dwellBefore, matrix, routePlaces } from "./routing.js";
-import { defaultDepartureLocal, fmtDateTime, fmtHHMM, fmtTime, toDatetimeLocal, tzAbbrev } from "./tz.js";
+import { defaultDepartureLocal, fmtDateTime, fmtHHMM, fmtTime, instantFromWallClock, toDatetimeLocal, tzAbbrev, wallClockValue } from "./tz.js";
 
 const $ = (id) => document.getElementById(id);
 const FILTERS_KEY = "ss:filters:v2"; // bumped when defaults change so they take effect
@@ -277,6 +278,7 @@ async function useMyLocation() {
         setStatus("");
       }
       saveRouteInput();
+      updateDepartureZoneNote();
       btn.disabled = false;
     },
     (err) => { setStatus(`Couldn't get your location (${err.message}). Type it instead.`, true); btn.disabled = false; },
@@ -284,11 +286,38 @@ async function useMyLocation() {
   );
 }
 
-function readDeparture() {
+// The picker holds a wall-clock time. It means that time at the ORIGIN: the
+// same as the phone's clock when you start from where you are, but a trip
+// planned from Utah that starts in California leaves at 8:00 Pacific.
+function readDeparture(originTz) {
   const v = $("departure").value;
-  const d = v ? new Date(v) : null;
+  const tz = originTz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const d = v ? instantFromWallClock(v, tz) : null;
   if (!d || Number.isNaN(d.getTime())) throw new Error("Pick a departure date and time.");
   return d;
+}
+
+// The origin as a place with coordinates: the picked place, or the typed text
+// geocoded now (once), so its zone is known before the departure is read.
+async function resolveOrigin() {
+  if (state.places.origin && typeof state.places.origin.lng === "number") return state.places.origin;
+  const text = $("origin").value.trim();
+  if (!text) return null;
+  const hit = await geocodeOne(text);
+  return { ...hit, name: text };
+}
+
+// Note under the picker when the origin's zone differs from the phone's.
+async function updateDepartureZoneNote() {
+  const el = $("departure-tz");
+  const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const o = state.places.origin;
+  if (!o || typeof o.lng !== "number") { el.hidden = true; return; }
+  const tz = await tzAt(o.lng, o.lat);
+  if (tz === localTz) { el.hidden = true; return; }
+  const now = new Date();
+  el.textContent = `Departure is read in the starting point's zone: ${tzAbbrev(now, tz)} (your phone is on ${tzAbbrev(now, localTz)}).`;
+  el.hidden = false;
 }
 
 // A pasted link is an importer, not a route mode: it fills the A -> B fields
@@ -331,6 +360,7 @@ function clearRouteInputs() {
   clearResults();
   if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
   saveRouteInput();
+  updateDepartureZoneNote();
   setStatus("Route cleared.");
 }
 
@@ -351,11 +381,16 @@ function fillForm(places, dwellMins, departure, sourceWord) {
     addWaypointRow(pick, pick ? undefined : p.query || p.name, dwellMins[i] || "");
   });
   if (departure) {
-    $("departure").value = toDatetimeLocal(departure);
-    saveDeparture($("departure").value);
+    // An absolute instant from a link: show it as wall-clock time at the
+    // origin when the origin's zone is known, else in the phone's zone.
+    const o = places[0];
+    const setPicker = (tz) => { $("departure").value = tz ? wallClockValue(departure, tz) : toDatetimeLocal(departure); saveDeparture($("departure").value); };
+    if (o && typeof o.lng === "number") tzAt(o.lng, o.lat).then(setPicker);
+    else setPicker(null);
   }
   selectTab("ab");
   saveRouteInput();
+  updateDepartureZoneNote();
 
   const notes = [];
   if (departure) notes.push(`departure taken from the ${sourceWord}`);
@@ -373,16 +408,18 @@ async function importAbrp(fileOrBuffer) {
   const plan = await parseAbrpXlsx(buf);
   const places = plan.stops.map((s) => (isUnresolvableName(s.rawName) ? null : { query: s.name, name: s.name }));
   const dwellMins = plan.stops.slice(1, -1).map((s) => (s.dwellSeconds ? Math.round(s.dwellSeconds / 60) : ""));
-  // ABRP gives a clock time for departure but no date: use the date already
-  // in the picker.
-  let departure = null;
+  // ABRP gives a wall-clock departure at the origin but no date. Put that
+  // clock straight into the picker on the date already there; the picker is
+  // read in the origin's zone, which is exactly what ABRP meant.
+  const waiting = fillForm(places, dwellMins, null, "ABRP export");
   const dep = plan.stops[0].departureMin;
   if (dep !== null) {
-    const d = new Date($("departure").value || Date.now());
-    d.setHours(Math.floor(dep / 60), dep % 60, 0, 0);
-    departure = d;
+    const date = ($("departure").value || toDatetimeLocal(new Date())).slice(0, 10);
+    const pad = (n) => String(n).padStart(2, "0");
+    $("departure").value = `${date}T${pad(Math.floor(dep / 60))}:${pad(dep % 60)}`;
+    saveDeparture($("departure").value);
+    setStatus(`${$("status").textContent} Departure ${fmtClock(dep)} taken from the ABRP export.`);
   }
-  const waiting = fillForm(places, dwellMins, departure, "ABRP export");
   state.planLegSeconds = plan.stops.slice(0, -1).map((s) => s.driveSecondsToNext);
   if (state.planLegSeconds.some((s) => s === null)) state.planLegSeconds = null;
   saveRouteInput();
@@ -401,7 +438,7 @@ function renderPlanSummary(plan) {
   parts.push(`${fmtDuration(drive)} driving`);
   if (dwell) parts.push(`${fmtDuration(dwell)} at stops`, `${fmtDuration(total)} total`);
   const first = plan.stops[0], last = plan.stops[plan.stops.length - 1];
-  if (first.departureMin !== null && last.arrivalMin !== null) parts.push(`${fmtClock(first.departureMin)} → ${fmtClock(last.arrivalMin)} (ABRP's times)`);
+  if (first.departureMin !== null && last.arrivalMin !== null) parts.push(`${fmtClock(first.departureMin)} → ${fmtClock(last.arrivalMin)} (ABRP's times, local at each stop)`);
   const el = $("route-summary");
   el.textContent = parts.join(" · ");
   el.hidden = false;
@@ -431,24 +468,27 @@ function renderItinerary(rows) {
       const stay = r.dwellSeconds ? ` (${Math.round(r.dwellSeconds / 60)} min)` : "";
       times = `${r.arrive ? `<b>${escapeHtml(r.arrive)}</b>` : "?"} → ${r.depart ? `<b>${escapeHtml(r.depart)}</b>` : "?"}${stay}`;
     }
+    if (r.tag) times += `<span class="tz">${escapeHtml(r.tag)}</span>`;
     return `<li><span class="place" title="${escapeAttr(r.name)}">${escapeHtml(r.name)}</span><span class="times">${times}</span></li>`;
   }).join("");
   ol.hidden = rows.length === 0;
 }
 
 // Itinerary from the routed times: arrival at place k is departure plus the
-// (scaled) legs before it plus the dwell at the stops already passed.
-function itineraryFromRoute(route) {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+// (scaled) legs before it plus the dwell at the stops already passed. Each
+// row is in that place's own zone, tagged when it differs from the browser's.
+function itineraryFromRoute(route, zones, localTz) {
   const t0 = route.departure.getTime();
   let drive = 0;
   return route.places.map((p, k) => {
+    const tz = zones[k] || localTz;
     if (k > 0) drive += route.legSeconds[k - 1] || 0;
     const dwellPassed = k > 0 ? dwellBefore(route.places, k - 1) : 0;
     const arrive = new Date(t0 + (drive + dwellPassed) * 1000);
     const dwell = k > 0 && k < route.places.length - 1 ? p.dwellSeconds || 0 : 0;
     const depart = new Date(arrive.getTime() + dwell * 1000);
-    return { name: p.name, arrive: fmtTime(arrive, tz), depart: fmtTime(depart, tz), dwellSeconds: dwell };
+    const tag = tz !== localTz ? ` ${tzAbbrev(arrive, tz)}` : "";
+    return { name: p.name, arrive: fmtTime(arrive, tz), depart: fmtTime(depart, tz), dwellSeconds: dwell, tag };
   });
 }
 
@@ -458,7 +498,6 @@ function selectTab(name) {
 }
 
 async function buildRoute() {
-  const departure = readDeparture();
   const mode = state.routeMode;
   if (mode === "link") {
     let waitingForLocation;
@@ -476,12 +515,16 @@ async function buildRoute() {
         if (waiting) throw new Error("Getting your location for the start. Press Find wards again once it shows in the From field.");
         return buildRoute();
       }
-      return await fromTrackFile(await f.text(), f.name, departure);
+      // A track file's own timestamps win when it has them; otherwise the
+      // picker is read in the phone's zone since the file has no origin yet.
+      return await fromTrackFile(await f.text(), f.name, readDeparture());
     } catch (e) { showFieldError("file-error", e.message); throw e; }
   }
-  const o = state.places.origin || ($("origin").value.trim() ? { query: $("origin").value.trim() } : null);
+  const o = await resolveOrigin();
   const d = state.places.destination || ($("destination").value.trim() ? { query: $("destination").value.trim() } : null);
   if (!o || !d) throw new Error("Enter where you're starting and where you're going.");
+  const originTz = await tzAt(o.lng, o.lat);
+  const departure = readDeparture(originTz);
   // Stops come from their rows in order: a picked place if there is one,
   // otherwise the typed text to geocode on submit, same as From and To.
   const vias = [];
@@ -588,21 +631,25 @@ async function go() {
 }
 
 // The route line persists above the results; the status line is transient.
-function renderRouteSummary(route) {
+// Every time is shown in the zone of the place it happens at, with the zone
+// abbreviation whenever that differs from the browser's zone.
+async function renderRouteSummary(route) {
   const el = $("route-summary");
   const dwell = route.dwellSeconds || 0;
   const arrive = new Date(route.departure.getTime() + route.totalSeconds * 1000);
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const zones = await Promise.all(route.places.map((p) => tzAt(p.lng, p.lat)));
+  const destTz = zones[zones.length - 1];
   const parts = [
     `${route.totalMiles.toFixed(0)} mi`,
     `${fmtDuration(route.totalSeconds - dwell)} driving`,
   ];
   if (dwell) parts.push(`${fmtDuration(dwell)} at stops`, `${fmtDuration(route.totalSeconds)} total`);
-  parts.push(`arrive ${fmtDateTime(arrive, tz)} ${tzAbbrev(arrive, tz)} (your time zone)`);
+  parts.push(`arrive ${fmtDateTime(arrive, destTz)}${destTz !== localTz ? ` ${tzAbbrev(arrive, destTz)} (local there)` : ""}`);
   if (route.timingNote) parts.push(route.timingNote);
   el.textContent = parts.join(" · ");
   el.hidden = false;
-  renderItinerary(itineraryFromRoute(route));
+  renderItinerary(itineraryFromRoute(route, zones, localTz));
 }
 
 // ---------------------------------------------------------------- render
@@ -757,6 +804,7 @@ function highlight(id, on) {
 }
 
 function deltaWords(c) {
+  if (c.wrongDay) return { text: `no meeting that day (meets ${titleCase(c.meetsOn)})`, cls: "warn" };
   if (c.deltaMinutes === null) return { text: "time unknown", cls: "warn" };
   const m = Math.round(c.deltaMinutes);
   if (m > 0) return { text: `${m} min late`, cls: "bad" };
@@ -879,6 +927,7 @@ function wireInfoHints() {
     const prev = hint.previousElementSibling;
     if (label) label.appendChild(btn);
     else if (heading) heading.appendChild(btn);
+    else if (prev && prev.tagName === "H2") prev.appendChild(btn); // a section note right under its heading
     else if (prev && prev.tagName === "BUTTON") prev.after(btn);
     else if (prev && prev.classList.contains("row")) prev.appendChild(btn); // a row of buttons
     else hint.parentNode.insertBefore(btn, hint);
@@ -889,6 +938,22 @@ function fmtDuration(sec) {
   return h ? `${h} h ${m} min` : `${m} min`;
 }
 function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+function titleCase(s) { return String(s || "").toLowerCase().replace(/^\w/, (ch) => ch.toUpperCase()); }
+
+// Time zone at a point, from the nearest building in the local tiles. Falls
+// back to the browser's zone when no tile covers the spot.
+async function tzAt(lng, lat) {
+  const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const keys = tilesForBbox(bufferBbox([lng, lat, lng, lat], 25));
+  const tiles = await Promise.all(keys.map((k) => loadTile(k)));
+  let best = null, bestMi = Infinity;
+  for (const b of tiles.flat().filter(Boolean)) {
+    if (!b.tz) continue;
+    const mi = haversineMi(lng, lat, b.lng, b.lat);
+    if (mi < bestMi) { bestMi = mi; best = b.tz; }
+  }
+  return best || local;
+}
 function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
 function escapeAttr(s) { return escapeHtml(s); }
 
@@ -906,7 +971,7 @@ function boot() {
   initMap();
   bindTabs();
   bindFilters();
-  attachSuggest($("origin"), $("origin-suggest"), (p) => { state.places.origin = p; });
+  attachSuggest($("origin"), $("origin-suggest"), (p) => { state.places.origin = p; updateDepartureZoneNote(); });
   attachSuggest($("destination"), $("destination-suggest"), (p) => { state.places.destination = p; });
   $("add-waypoint").addEventListener("click", () => { addWaypointRow(); saveRouteInput(); });
   $("use-location").addEventListener("click", useMyLocation);
@@ -936,6 +1001,7 @@ function boot() {
   // Editing stops by hand invalidates per-leg times from an export.
   $("add-waypoint").addEventListener("click", () => { state.planLegSeconds = null; });
   restoreRouteInput();
+  updateDepartureZoneNote();
   wireInfoHints();
   // iOS Safari ignores user-scalable=no; block pinch on the panel here. The
   // map keeps its own pinch handling.

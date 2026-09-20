@@ -12,7 +12,7 @@
 
 import { bufferBbox, tilesForBbox, VertexBuckets } from "./geo.js";
 import { dwellBefore } from "./routing.js";
-import { meetingStartInstant } from "./tz.js";
+import { meetingStartInstant, weekdayIn } from "./tz.js";
 
 export const IDEAL_EARLY = 12; // minutes before start
 
@@ -158,8 +158,13 @@ export async function findCandidates(route, filters, deps) {
     const eta = new Date(route.departure.getTime() + r.vertex.t * 1000);
     for (const u of r.units) {
       if (u.flags?.length && !filters.showFlagged) continue;
-      let delta = null, startInstant = null;
-      if (u.start && !u.flags?.includes("no_start_time")) {
+      let delta = null, startInstant = null, wrongDay = false;
+      // The meeting is on a specific weekday (Sunday nearly everywhere, but
+      // the dataset says which). Compare against the weekday you'd arrive,
+      // in the building's zone; any other day there is simply no meeting.
+      const meetsOn = u.day || "SUNDAY";
+      if (weekdayIn(eta, r.building.tz) !== meetsOn) wrongDay = true;
+      else if (u.start && !u.flags?.includes("no_start_time")) {
         startInstant = meetingStartInstant(eta, u.start, r.building.tz);
         delta = (eta - startInstant) / 60000;
       }
@@ -170,7 +175,7 @@ export async function findCandidates(route, filters, deps) {
         milesAlongRoute: r.vertex.d,
         offRouteMiles: r.offRouteMiles,
         etaAtNearestPoint: eta,
-        startInstant, deltaMinutes: delta,
+        startInstant, deltaMinutes: delta, wrongDay, meetsOn,
         detourMinutes: null, arrivalAtBuilding: eta,
         routed: false, passes: false, needsDetour: timeOk,
         legIndex: r.vertex.leg, vertexIndex: r.vertexIndex,

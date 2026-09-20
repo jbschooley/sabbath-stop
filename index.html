@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/app.css?v=2026092011">
+  <link rel="stylesheet" href="css/app.css?v=2026092013">
   <!-- Cache busting without a build step. GitHub Pages serves everything with
        max-age=600, so a phone that opened the app minutes before a deploy keeps
        running the old scripts. Bump the version on every deploy; the import
@@ -16,13 +16,13 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/abrp.js":      "./js/abrp.js?v=2026092011",
-      "./js/finder.js":    "./js/finder.js?v=2026092011",
-      "./js/geo.js":       "./js/geo.js?v=2026092011",
-      "./js/geocode.js":   "./js/geocode.js?v=2026092011",
-      "./js/providers.js": "./js/providers.js?v=2026092011",
-      "./js/routing.js":   "./js/routing.js?v=2026092011",
-      "./js/tz.js":        "./js/tz.js?v=2026092011"
+      "./js/abrp.js":      "./js/abrp.js?v=2026092013",
+      "./js/finder.js":    "./js/finder.js?v=2026092013",
+      "./js/geo.js":       "./js/geo.js?v=2026092013",
+      "./js/geocode.js":   "./js/geocode.js?v=2026092013",
+      "./js/providers.js": "./js/providers.js?v=2026092013",
+      "./js/routing.js":   "./js/routing.js?v=2026092013",
+      "./js/tz.js":        "./js/tz.js?v=2026092013"
     }
   }
   </script>
@@ -39,7 +39,8 @@
         <input id="departure" type="datetime-local" aria-label="Departure date and time">
         <button class="btn icon" id="reset-departure" type="button" title="Reset to the default time" aria-label="Reset departure to the default">↺</button>
       </div>
-      <p class="hint info">Every arrival time depends on this. Defaults to right now on a Sunday, otherwise 8:00 AM next Sunday, and remembers a future time you set. A Google Maps link with "depart at" or an ABRP export fills it in; Apple Maps links carry no time.</p>
+      <p class="hint warn" id="departure-tz" hidden></p>
+      <p class="hint info">Every arrival time depends on this. It is the clock time at your starting point: the same as your phone when you start from where you are, otherwise the start's own zone. Defaults to right now on a Sunday, otherwise 8:00 AM next Sunday, and remembers a future time you set. A Google Maps link with "depart at" or an ABRP export fills it in; Apple Maps links carry no time.</p>
     </div>
     <div class="field">
       <label for="traffic-h">Drive time from Google or Apple Maps (optional)</label>
@@ -102,6 +103,7 @@
     </div>
 
     <h2>Which units?</h2>
+    <p class="hint info">Each chip is one exact type from the locator. "Young Single Adult" is only wards typed plain YSA; the 18–25 and 26–35 wards are separate types, so tick those too if you want every YSA ward. The same goes for other split types under "More unit types".</p>
     <div class="chips" id="subtypes"></div>
     <details class="more"><summary>More unit types</summary><div class="chips" id="subtypes-more"></div></details>
     <p class="hint" id="subtype-hint">Pick at least one unit type.</p>
@@ -150,6 +152,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script type="module" src="js/main.js?v=2026092011"></script>
+<script type="module" src="js/main.js?v=2026092013"></script>
 </body>
 </html>

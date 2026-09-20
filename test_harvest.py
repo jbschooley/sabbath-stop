@@ -128,6 +128,16 @@ def test_normalize() -> None:
     check("end truncated to HH:MM", by_id["81086"]["end"] == "12:30")
     check("missing end tolerated", by_id["99999"]["end"] is None)
 
+    # Meeting day: taken from the API when present, SUNDAY when it is not.
+    # A few units worldwide meet on Friday or Saturday.
+    check("day defaults to SUNDAY when the API omits it", by_id["12688"]["day"] == "SUNDAY")
+    friday = normalize({
+        "id": "f", "coordinates": [55.27, 25.2],
+        "associated": [{"id": "1", "type": "WARD", "nameDisplay": "Dubai Ward",
+                        "hours": {"primary": {"hour": {"code": "10:00:00"}, "day": {"code": "FRIDAY"}}}}],
+    })
+    check("day taken from primary.day", friday["units"][0]["day"] == "FRIDAY")
+
     check("no coords -> None", normalize({"id": "x", "coordinates": []}) is None)
     check("no ward units -> None",
           normalize({"id": "x", "coordinates": [0, 0],

@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexBuckets } from "./js/geo.js";
-import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal } from "./js/tz.js";
+import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal, weekdayIn, wallClockValue, instantFromWallClock } from "./js/tz.js";
 import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS } from "./js/finder.js";
 import { dwellBefore, applyDwell } from "./js/routing.js";
 import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
@@ -100,6 +100,18 @@ test("meeting start resolves on the arrival's calendar day in the building's zon
   const arrival = new Date("2026-09-27T05:30:00Z");
   const start = meetingStartInstant(arrival, "09:00", "America/Denver");
   assert.equal(start.toISOString(), "2026-09-26T15:00:00.000Z");
+});
+test("weekdayIn: the weekday depends on the zone near midnight", () => {
+  const inst = new Date("2026-09-27T05:30:00Z"); // Sunday 05:30Z
+  assert.equal(weekdayIn(inst, "UTC"), "SUNDAY");
+  assert.equal(weekdayIn(inst, "America/Denver"), "SATURDAY"); // 23:30 MDT the night before
+  assert.equal(weekdayIn(inst, "Asia/Dubai"), "SUNDAY");
+});
+test("a picker value is read in the origin's zone: 8:00 in California is 15:00Z", () => {
+  assert.equal(instantFromWallClock("2026-09-27T08:00", "America/Los_Angeles").toISOString(), "2026-09-27T15:00:00.000Z");
+  assert.equal(instantFromWallClock("2026-09-27T08:00", "America/Denver").toISOString(), "2026-09-27T14:00:00.000Z");
+  assert.equal(instantFromWallClock("nonsense", "America/Denver"), null);
+  assert.equal(wallClockValue(new Date("2026-09-27T15:00:00Z"), "America/Los_Angeles"), "2026-09-27T08:00");
 });
 test("Arizona has no DST", () => {
   assert.equal(zonedToInstant(2026, 7, 5, 9, 0, "America/Phoenix").toISOString(), "2026-07-05T16:00:00.000Z");
@@ -251,6 +263,26 @@ await atest("findCandidates: matrix pipeline times only promising candidates", a
   assert.ok(Math.abs(mid.deltaMinutes - (leg - 15)) < 0.05, String(mid.deltaMinutes));
   assert.equal(out[0].unit.id, "u1", "best fit sorts first");
   assert.equal(out.find((c) => c.unit.id === "u4").passes, false);
+});
+
+await atest("findCandidates: arriving on a day the unit doesn't meet is not a fit", async () => {
+  const { route, tile, filters } = fixture();
+  route.departure = new Date("2026-09-23T14:00:00Z"); // a Wednesday
+  const out = await findCandidates(route, { ...filters, windowMin: -600, windowMax: 600 }, { loadTile: async () => tile, matrix: fakeMatrix, concurrency: 1 });
+  const mid = out.find((c) => c.unit.id === "u1");
+  assert.equal(mid.wrongDay, true);
+  assert.equal(mid.passes, false);
+  assert.equal(mid.deltaMinutes, null);
+  assert.equal(mid.routed, false, "no routing budget spent on it");
+});
+await atest("findCandidates: a unit that meets on Friday fits a Friday arrival", async () => {
+  const { route, tile, filters } = fixture();
+  tile[0].units[0].day = "FRIDAY";
+  route.departure = new Date("2026-09-25T14:00:00Z"); // a Friday
+  const out = await findCandidates(route, filters, { loadTile: async () => tile, matrix: fakeMatrix, concurrency: 1 });
+  const mid = out.find((c) => c.unit.id === "u1");
+  assert.equal(mid.wrongDay, false);
+  assert.equal(mid.passes, true);
 });
 
 await atest("findCandidates: showFlagged surfaces flagged units with no delta", async () => {

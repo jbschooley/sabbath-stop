@@ -243,6 +243,13 @@ def normalize(raw: dict) -> dict | None:
         primary = hours.get("primary") or {}
         hour = (primary.get("hour") or {}).get("code")  # "HH:MM:SS"
         start = hour[:5] if hour else None                # -> "HH:MM"
+        # Day of the week the sacrament meeting is held. Sunday almost
+        # everywhere, but Friday in some Gulf states and Saturday in Israel,
+        # so the app must not assume it.
+        day = (primary.get("day") or {}).get("code")
+        if not day:
+            days = hours.get("days") or []
+            day = ((days[0].get("day") or {}).get("code")) if days else None
 
         finish = None
         days = hours.get("days") or []
@@ -261,6 +268,7 @@ def normalize(raw: dict) -> dict | None:
                 "subTypeDisplay": w.get("subTypeDisplay") or "Conventional",
                 "start": start,
                 "end": finish,
+                "day": day or "SUNDAY",
                 "lang": (w.get("language") or {}).get("code"),
             }
         )
