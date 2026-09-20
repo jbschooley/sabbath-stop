@@ -122,6 +122,9 @@ export function parseAppleUrl(url) {
 
 export function looksLikeGoogle(url) { return /google\.[a-z.]+\/maps|goo\.gl/.test(url); }
 export function looksLikeApple(url) { return /maps\.apple\.com/.test(url); }
+// ABRP's "Export to Excel" share link. Served with CORS, so it can be fetched
+// straight from the page.
+export function looksLikeAbrpFile(url) { return /api\.iternio\.com\/1\/files\/get_file\?/.test(url); }
 
 // One entry point for pasted links. Returns { places, departure } where
 // places[0] may be null (use the device's location) and departure may be null.

@@ -4,7 +4,7 @@
 import { DEFAULT_FILTERS, findCandidates, reapply } from "./finder.js";
 import { debounce, reverse, suggest } from "./geocode.js";
 import { isUnresolvableName, looksLikeXlsx, parseAbrpXlsx } from "./abrp.js";
-import { defaultDwellMinutes, fromPlaces, fromTrackFile, parseLink } from "./providers.js";
+import { defaultDwellMinutes, fromPlaces, fromTrackFile, looksLikeAbrpFile, parseLink } from "./providers.js";
 import { applyDwell, matrix, routePlaces } from "./routing.js";
 import { defaultDepartureLocal, fmtDateTime, fmtHHMM, toDatetimeLocal, tzAbbrev } from "./tz.js";
 
@@ -291,9 +291,17 @@ function readDeparture() {
 
 // A pasted link is an importer, not a route mode: it fills the A -> B fields
 // and switches to that tab, so there is one place the route comes from.
-function importLink() {
+// Returns true when the origin is still being resolved (geolocation).
+async function importLink() {
   const url = $("link").value.trim();
   if (!url) throw new Error("Paste a directions link.");
+  if (looksLikeAbrpFile(url)) {
+    setStatus("Fetching the ABRP export…");
+    let resp;
+    try { resp = await fetch(url); } catch { throw new Error("Couldn't download the ABRP export. Download it yourself and use the File / ABRP tab."); }
+    if (!resp.ok) throw new Error(`ABRP returned HTTP ${resp.status} for that export link.`);
+    return importAbrp(await resp.arrayBuffer());
+  }
   const { places, departure } = parseLink(url);
 
   state.planLegSeconds = null;
@@ -334,8 +342,8 @@ function fillForm(places, dwellMins, departure, sourceWord) {
 // ABRP "Export to Excel": names, charge times and per-leg drive times, but no
 // coordinates. Stops go in as text for Photon to resolve; charge time becomes
 // dwell; the per-leg times replace the router's once the route is built.
-async function importAbrp(file) {
-  const buf = await file.arrayBuffer();
+async function importAbrp(fileOrBuffer) {
+  const buf = fileOrBuffer instanceof ArrayBuffer ? fileOrBuffer : await fileOrBuffer.arrayBuffer();
   const plan = await parseAbrpXlsx(buf);
   const places = plan.stops.map((s) => (isUnresolvableName(s.rawName) ? null : { query: s.name, name: s.name }));
   const dwellMins = plan.stops.slice(1, -1).map((s) => (s.chargeSeconds ? Math.round(s.chargeSeconds / 60) : ""));
@@ -365,7 +373,7 @@ async function buildRoute() {
   const mode = state.routeMode;
   if (mode === "link") {
     let waitingForLocation;
-    try { waitingForLocation = importLink(); showFieldError("link-error", ""); }
+    try { waitingForLocation = await importLink(); showFieldError("link-error", ""); }
     catch (e) { showFieldError("link-error", e.message); throw e; }
     if (waitingForLocation) throw new Error("Getting your location for the start. Press Find wards again once it shows in the From field.");
     return buildRoute();
@@ -713,9 +721,9 @@ function boot() {
   $("link").addEventListener("input", saveRouteInput);
   // Import as soon as a link lands in the field, whether pasted or typed.
   // Errors show right under the field, where a phone user is looking.
-  const tryImport = () => {
+  const tryImport = async () => {
     if (!$("link").value.trim()) { showFieldError("link-error", ""); return; }
-    try { importLink(); showFieldError("link-error", ""); }
+    try { await importLink(); showFieldError("link-error", ""); }
     catch (e) { showFieldError("link-error", e.message); }
   };
   $("link").addEventListener("paste", () => setTimeout(tryImport, 0));
