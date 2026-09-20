@@ -1,0 +1,247 @@
+[
+  {
+    "code": "CONVENTIONAL",
+    "label": "Conventional",
+    "count": 12844
+  },
+  {
+    "code": "SPANISH",
+    "label": "Spanish",
+    "count": 926
+  },
+  {
+    "code": "YSA",
+    "label": "Young Single Adult",
+    "count": 776
+  },
+  {
+    "code": "YSA_JR",
+    "label": "Young Single Adult 18-25",
+    "count": 269
+  },
+  {
+    "code": "STUDENT_MARRIED",
+    "label": "Student Married",
+    "count": 116
+  },
+  {
+    "code": "TONGAN",
+    "label": "Tongan",
+    "count": 102
+  },
+  {
+    "code": "YSA_SR",
+    "label": "Young Single Adult 26-35",
+    "count": 93
+  },
+  {
+    "code": "SAMOAN",
+    "label": "Samoan",
+    "count": 60
+  },
+  {
+    "code": "SINGLE_ADULT",
+    "label": "Single Adult",
+    "count": 45
+  },
+  {
+    "code": "PORTUGUESE",
+    "label": "Portuguese",
+    "count": 38
+  },
+  {
+    "code": "MANDARIN",
+    "label": "Mandarin",
+    "count": 27
+  },
+  {
+    "code": "FRENCH",
+    "label": "French",
+    "count": 27
+  },
+  {
+    "code": "DEAF",
+    "label": "Sign Language",
+    "count": 20
+  },
+  {
+    "code": "HAITIAN_CREOLE",
+    "label": "Haitian Creole",
+    "count": 15
+  },
+  {
+    "code": "MILITARY",
+    "label": "Military",
+    "count": 15
+  },
+  {
+    "code": "MARSHALLESE",
+    "label": "Marshallese",
+    "count": 12
+  },
+  {
+    "code": "SPANISH_YSA",
+    "label": "Young Single Adult - Spanish",
+    "count": 12
+  },
+  {
+    "code": "HMONG",
+    "label": "Hmong",
+    "count": 10
+  },
+  {
+    "code": "TAGALOG",
+    "label": "Tagalog",
+    "count": 9
+  },
+  {
+    "code": "SWAHILI",
+    "label": "Swahili",
+    "count": 9
+  },
+  {
+    "code": "CHINESE",
+    "label": "Chinese",
+    "count": 8
+  },
+  {
+    "code": "TONGAN_YSA",
+    "label": "Young Single Adult - Tongan",
+    "count": 8
+  },
+  {
+    "code": "SEASONAL",
+    "label": "Seasonal",
+    "count": 6
+  },
+  {
+    "code": "KOREAN",
+    "label": "Korean",
+    "count": 6
+  },
+  {
+    "code": "VISITOR",
+    "label": "Visitor",
+    "count": 5
+  },
+  {
+    "code": "VIETNAMESE",
+    "label": "Vietnamese",
+    "count": 3
+  },
+  {
+    "code": "CAMBODIAN",
+    "label": "Cambodian",
+    "count": 3
+  },
+  {
+    "code": "PERSIAN",
+    "label": "Persian",
+    "count": 3
+  },
+  {
+    "code": "FIJIAN",
+    "label": "Fijian",
+    "count": 3
+  },
+  {
+    "code": "NEPALI",
+    "label": "Nepali",
+    "count": 3
+  },
+  {
+    "code": "RUSSIAN",
+    "label": "Russian",
+    "count": 3
+  },
+  {
+    "code": "TRANSITIONAL",
+    "label": "Transitional",
+    "count": 3
+  },
+  {
+    "code": "CHUUKIC_POHNPEIC",
+    "label": "Chuukic-Pohnpeic",
+    "count": 3
+  },
+  {
+    "code": "STUDENT",
+    "label": "Student",
+    "count": 3
+  },
+  {
+    "code": "FILIPINO",
+    "label": "Filipino",
+    "count": 2
+  },
+  {
+    "code": "NATIVE_AMERICAN",
+    "label": "Native American",
+    "count": 2
+  },
+  {
+    "code": "KAREN",
+    "label": "Karen",
+    "count": 2
+  },
+  {
+    "code": "JAPANESE",
+    "label": "Japanese",
+    "count": 2
+  },
+  {
+    "code": "ENGLISH",
+    "label": "English",
+    "count": 2
+  },
+  {
+    "code": "ASIAN_YSA",
+    "label": "Young Single Adult - Asian",
+    "count": 2
+  },
+  {
+    "code": "SPANISH_YSA_JR",
+    "label": "Young Single Adult 18-25 - Spanish",
+    "count": 2
+  },
+  {
+    "code": "STUDENT_SINGLE",
+    "label": "Student Single",
+    "count": 1
+  },
+  {
+    "code": "CANTONESE",
+    "label": "Cantonese",
+    "count": 1
+  },
+  {
+    "code": "JUBA_ARABIC",
+    "label": "Juba Arabic",
+    "count": 1
+  },
+  {
+    "code": "POHNPEIAN",
+    "label": "Pohnpeian",
+    "count": 1
+  },
+  {
+    "code": "LAOTIAN",
+    "label": "Laotian",
+    "count": 1
+  },
+  {
+    "code": "MONGOLIAN",
+    "label": "Mongolian",
+    "count": 1
+  },
+  {
+    "code": "SPANISH_STUDENT_MARRIED",
+    "label": "Student Married - Spanish",
+    "count": 1
+  },
+  {
+    "code": "SPANISH_YSA_SR",
+    "label": "Young Single Adult 26-35 - Spanish",
+    "count": 1
+  }
+]
