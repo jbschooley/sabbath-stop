@@ -19,7 +19,7 @@
     <h2>When are you leaving?</h2>
     <div class="field">
       <input id="departure" type="datetime-local" aria-label="Departure date and time">
-      <p class="hint">Every arrival time depends on this. Defaults to next Sunday, 8:00 AM your time.</p>
+      <p class="hint">Every arrival time depends on this. Defaults to right now; change it for a trip later in the week.</p>
     </div>
     <div class="field">
       <label for="traffic-time">Drive time from Google or Apple Maps (optional)</label>
@@ -91,7 +91,7 @@
       </div>
       <label class="toggle"><input id="wide" type="checkbox"> Wide mode: anything starting within
         <input id="wide-hours" type="number" min="0.5" max="6" step="0.5" style="width:60px"> h of arrival (EV / long stops)</label>
-      <label class="toggle"><input id="hide-restricted" type="checkbox"> Hide restricted-access units (correctional facilities)</label>
+      <label class="toggle"><input id="show-flagged" type="checkbox"> Show units with data problems (missing or implausible times, restricted access)</label>
     </div>
 
     <button class="btn primary" id="go">Find wards</button>

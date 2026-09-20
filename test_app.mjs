@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexBuckets } from "./js/geo.js";
 import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, parseDuration, defaultDepartureLocal } from "./js/tz.js";
-import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates } from "./js/finder.js";
+import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute } from "./js/finder.js";
 import { parseGoogleUrl, parseAppleUrl } from "./js/providers.js";
 
 let passed = 0, failed = 0;
@@ -110,12 +110,10 @@ test("parseDuration accepts the common shapes", () => {
   assert.equal(parseDuration(""), null);
   assert.equal(parseDuration("soon"), null);
 });
-test("default departure is a Sunday at 08:00", () => {
-  const v = defaultDepartureLocal(new Date(2026, 8, 20, 15, 0)); // a Sunday afternoon
-  const d = new Date(v);
-  assert.equal(d.getDay(), 0);
-  assert.equal(d.getHours(), 8);
-  assert.ok(d > new Date(2026, 8, 20, 15, 0), "must be the *next* Sunday");
+test("default departure is now, rounded up to five minutes", () => {
+  assert.equal(defaultDepartureLocal(new Date(2026, 8, 20, 15, 3, 40)), "2026-09-20T15:05");
+  assert.equal(defaultDepartureLocal(new Date(2026, 8, 20, 15, 0, 0)), "2026-09-20T15:00");
+  assert.equal(defaultDepartureLocal(new Date(2026, 8, 20, 23, 58, 0)), "2026-09-21T00:00");
 });
 
 console.log("finder");
@@ -156,8 +154,24 @@ test("detour radius has a floor and grows with the budget", () => {
   assert.ok(detourRadiusMiles(60) > detourRadiusMiles(10));
 });
 
-await atest("findCandidates: full pipeline with a fake router and one tile", async () => {
-  // A straight east-west route along lat 40 from -112 to -111, one hour long.
+test("exitVertices picks vertices about EXIT_SPAN_MI before and after", () => {
+  const pts = [];
+  for (let i = 0; i <= 100; i++) pts.push({ d: i, t: i * 60 });
+  assert.deepEqual(exitVertices(pts, 50, 4), [46, 50, 54]);
+  assert.deepEqual(exitVertices(pts, 1, 4), [0, 1, 5]);
+  assert.deepEqual(exitVertices(pts, 100, 4), [96, 100]);
+});
+test("batchAlongRoute respects the size and span limits", () => {
+  const jobs = [];
+  for (let i = 0; i < 50; i++) jobs.push({ milesAlongRoute: i * 5 }); // 0..245 mi
+  const b = batchAlongRoute(jobs);
+  assert.ok(b.every((x) => x.length <= 20));
+  assert.ok(b.every((x) => x[x.length - 1].milesAlongRoute - x[0].milesAlongRoute <= 60));
+  assert.equal(b.flat().length, 50);
+});
+
+// Shared fixture: a straight east-west route along lat 40, one hour long.
+function fixture() {
   const points = [];
   for (let i = 0; i <= 100; i++) points.push({ lng: -112 + i * 0.01, lat: 40, t: i * 36, d: i * 0.53, leg: 0 });
   const departure = new Date("2026-09-27T14:00:00Z"); // 08:00 MDT
@@ -173,29 +187,79 @@ await atest("findCandidates: full pipeline with a fake router and one tile", asy
     building("wrongtype", -111.5, 40.01, [{ id: "u2", name: "Mid Spanish", subType: "SPANISH", start: "08:45" }]),
     // Far off the route: never reaches routing.
     building("far", -111.5, 41.5, [{ id: "u3", name: "Far YSA", subType: "YSA", start: "08:45" }]),
-    // Near, but starts at 08:00: already 30 min late at the nearest point, never routed.
+    // Near, but starts at 08:00: already 30 min late at the nearest point, never timed.
     building("late", -111.5, 40.01, [{ id: "u4", name: "Late YSA", subType: "YSA", start: "08:00" }]),
-    // No published time.
+    // No published time: flagged, hidden unless showFlagged.
     building("notime", -111.5, 40.01, [{ id: "u5", name: "Unknown YSA", subType: "YSA", start: null, flags: ["no_start_time"] }]),
   ];
-  const routed = [];
+  const filters = { subtypes: ["YSA"], maxDetourMin: 10, windowMin: -15, windowMax: 2, wide: false, wideHours: 2, showFlagged: false, sort: "best" };
+  return { route, tile, filters };
+}
+// Fake matrix: straight-line time at 30 mph.
+const fakeMatrix = async (sources, targets) =>
+  sources.map((s) => targets.map((t) => (haversineMi(s.lng, s.lat, t.lng, t.lat) / 30) * 3600));
+
+await atest("findCandidates: matrix pipeline times only promising candidates", async () => {
+  const { route, tile, filters } = fixture();
+  const matrixCalls = [];
   const deps = {
     loadTile: async (key) => (key === "w112_n40" ? tile : null),
-    routeDetour: async (places) => { routed.push(places[1].name); return { legSeconds: [1830, 1830], totalSeconds: 3660 }; },
-    maxDetourCalls: 10, concurrency: 1,
+    matrix: async (s, t) => { matrixCalls.push([s.length, t.length]); return fakeMatrix(s, t); },
+    routeDetour: async () => { throw new Error("should not be called"); },
+    concurrency: 1,
   };
-  const out = await findCandidates(route, { subtypes: ["YSA"], maxDetourMin: 10, windowMin: -15, windowMax: 2, wide: false, wideHours: 2, hideRestricted: true, sort: "best" }, deps);
-  assert.deepEqual(routed, ["mid"], "only the promising candidate gets a routing call");
+  const out = await findCandidates(route, filters, deps);
+  assert.equal(matrixCalls.length, 2, "one batch = two matrix calls");
   const ids = out.map((c) => c.unit.id);
-  assert.ok(ids.includes("u1") && ids.includes("u4") && ids.includes("u5") && !ids.includes("u2") && !ids.includes("u3"), ids.join(","));
+  assert.ok(ids.includes("u1") && ids.includes("u4") && !ids.includes("u2") && !ids.includes("u3") && !ids.includes("u5"), ids.join(","));
   const mid = out.find((c) => c.unit.id === "u1");
   assert.equal(mid.passes, true);
-  assert.equal(Math.round(mid.detourMinutes), 1);
-  // arrival = 08:00 + 1830 s = 08:30:30; start 08:45 -> 14.5 min early
-  assert.ok(Math.abs(mid.deltaMinutes + 14.5) < 0.01, String(mid.deltaMinutes));
+  // Nearest vertex is directly south (0.69 mi); best exit is that vertex both ways.
+  const leg = (haversineMi(-111.5, 40, -111.5, 40.01) / 30) * 60; // minutes
+  assert.ok(Math.abs(mid.detourMinutes - 2 * leg) < 0.05, `${mid.detourMinutes} vs ${2 * leg}`);
+  // arrival = 08:30 + leg; start 08:45
+  assert.ok(Math.abs(mid.deltaMinutes - (leg - 15)) < 0.05, String(mid.deltaMinutes));
   assert.equal(out[0].unit.id, "u1", "best fit sorts first");
   assert.equal(out.find((c) => c.unit.id === "u4").passes, false);
-  assert.equal(out.find((c) => c.unit.id === "u5").deltaMinutes, null);
+});
+
+await atest("findCandidates: showFlagged surfaces flagged units with no delta", async () => {
+  const { route, tile, filters } = fixture();
+  const deps = { loadTile: async () => tile, matrix: fakeMatrix, concurrency: 1 };
+  const out = await findCandidates(route, { ...filters, showFlagged: true }, deps);
+  const u5 = out.find((c) => c.unit.id === "u5");
+  assert.ok(u5, "flagged unit present");
+  assert.equal(u5.deltaMinutes, null);
+  assert.equal(u5.passes, false);
+});
+
+await atest("findCandidates: a failing matrix batch falls back to a full re-route", async () => {
+  const { route, tile, filters } = fixture();
+  const routed = [];
+  const deps = {
+    loadTile: async () => tile,
+    matrix: async () => { throw new Error("Path distance exceeds the max distance limit"); },
+    routeDetour: async (places) => { routed.push(places[1].name); return { legSeconds: [1830, 1830], totalSeconds: 3660 }; },
+    concurrency: 1,
+  };
+  const out = await findCandidates(route, filters, deps);
+  assert.deepEqual(routed, ["mid"]);
+  const mid = out.find((c) => c.unit.id === "u1");
+  assert.equal(mid.routed, true);
+  assert.equal(Math.round(mid.detourMinutes), 1);
+  assert.ok(Math.abs(mid.deltaMinutes + 14.5) < 0.01, String(mid.deltaMinutes));
+});
+
+await atest("findCandidates: traffic scale applies to matrix legs too", async () => {
+  const { route, tile, filters } = fixture();
+  route.timeScale = 2; route.totalSeconds *= 2; route.points.forEach((p) => (p.t *= 2));
+  const deps = { loadTile: async () => tile, matrix: fakeMatrix, concurrency: 1 };
+  const out = await findCandidates(route, { ...filters, windowMin: -120, windowMax: 120 }, deps);
+  const mid = out.find((c) => c.unit.id === "u1");
+  const leg = (haversineMi(-111.5, 40, -111.5, 40.01) / 30) * 60;
+  assert.ok(Math.abs(mid.detourMinutes - 4 * leg) < 0.05, String(mid.detourMinutes));
+  // arrival = 08:00 + 2*1800 s + 2*leg -> 09:00 + 2*leg; start 08:45
+  assert.ok(Math.abs(mid.deltaMinutes - (15 + 2 * leg)) < 0.05, String(mid.deltaMinutes));
 });
 
 console.log("providers");

@@ -72,12 +72,12 @@ export function fmtDateTime(date, tz) {
   }).format(date);
 }
 
-// Next Sunday 08:00 in the browser's zone, as a value for <input type=datetime-local>.
+// Now, rounded up to the next five minutes, as a value for <input type=datetime-local>.
 export function defaultDepartureLocal(now = new Date()) {
   const d = new Date(now);
-  const daysAhead = (7 - d.getDay()) % 7 || 7;
-  d.setDate(d.getDate() + daysAhead);
-  d.setHours(8, 0, 0, 0);
+  d.setSeconds(0, 0);
+  const extra = (5 - (d.getMinutes() % 5)) % 5;
+  d.setMinutes(d.getMinutes() + extra);
   return toDatetimeLocal(d);
 }
 

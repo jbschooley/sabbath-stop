@@ -5,7 +5,28 @@
 import { decodePolyline, haversineMi } from "./geo.js";
 
 export const VALHALLA_URL = "https://valhalla1.openstreetmap.de/route";
+export const MATRIX_URL = "https://valhalla1.openstreetmap.de/sources_to_targets";
 export const OSRM_URL = "https://router.project-osrm.org/route/v1/driving";
+
+// Drive times from every source to every target in one call. Same road graph
+// and costing as a route request, so each cell is an exact routed leg time.
+// Returns seconds[sourceIndex][targetIndex], null where unreachable.
+// The public instance refuses the whole request if any pair is over 150 km,
+// so callers batch by position along the route.
+export async function matrix(sources, targets, { departure } = {}) {
+  const body = {
+    sources: sources.map((p) => ({ lat: p.lat, lon: p.lng })),
+    targets: targets.map((p) => ({ lat: p.lat, lon: p.lng })),
+    costing: "auto",
+  };
+  if (departure) body.date_time = { type: 1, value: localStamp(departure) };
+  const resp = await fetch(MATRIX_URL, { method: "POST", body: JSON.stringify(body) });
+  const json = await resp.json().catch(() => null);
+  if (!resp.ok || !json || !json.sources_to_targets) {
+    throw new Error((json && json.error) || `matrix HTTP ${resp.status}`);
+  }
+  return json.sources_to_targets.map((row) => row.map((cell) => (cell && cell.time != null ? cell.time : null)));
+}
 
 const CACHE_PREFIX = "ss:route:";
 const CACHE_MAX_ENTRIES = 12;

@@ -4,12 +4,12 @@
 import { DEFAULT_FILTERS, findCandidates, reapply } from "./finder.js";
 import { debounce, reverse, suggest } from "./geocode.js";
 import { fromAppleUrl, fromGoogleUrl, fromPlaces, fromTrackFile, looksLikeApple, looksLikeGoogle } from "./providers.js";
-import { routePlaces } from "./routing.js";
+import { matrix, routePlaces } from "./routing.js";
 import { defaultDepartureLocal, fmtDateTime, fmtHHMM, parseDuration, tzAbbrev } from "./tz.js";
 
 const $ = (id) => document.getElementById(id);
 const FILTERS_KEY = "ss:filters";
-const TOP_SUBTYPES = ["YSA", "YSA_JR", "YSA_SR", "CONVENTIONAL", "SPANISH", "STUDENT_MARRIED"];
+const TOP_SUBTYPES = ["CONVENTIONAL", "YSA", "YSA_JR", "YSA_SR", "SPANISH", "STUDENT_MARRIED"];
 const MAX_MISSES_LISTED = 40;
 
 const state = {
@@ -98,7 +98,7 @@ function bindFilters() {
   $("window-max").value = f.windowMax;
   $("wide").checked = f.wide;
   $("wide-hours").value = f.wideHours;
-  $("hide-restricted").checked = f.hideRestricted;
+  $("show-flagged").checked = !!f.showFlagged;
   $("sort").value = f.sort;
   $("window-row").style.opacity = f.wide ? 0.5 : 1;
 
@@ -109,15 +109,15 @@ function bindFilters() {
     if (!(f.windowMin <= f.windowMax)) { f.windowMax = f.windowMin; $("window-max").value = f.windowMax; }
     f.wide = $("wide").checked;
     f.wideHours = clamp(parseFloat($("wide-hours").value) || 2, 0.5, 6);
-    f.hideRestricted = $("hide-restricted").checked;
+    f.showFlagged = $("show-flagged").checked;
     f.sort = $("sort").value;
     $("window-row").style.opacity = f.wide ? 0.5 : 1;
     saveFilters();
-    // Live re-apply without re-routing, except max detour, which changes the
-    // candidate set and needs a fresh search.
+    // Live re-apply without re-routing. Showing flagged units or raising max
+    // detour can add candidates that were never timed; that needs a fresh search.
     if (state.candidates.length) render();
   };
-  for (const id of ["window-min", "window-max", "wide", "wide-hours", "hide-restricted", "sort", "max-detour"]) {
+  for (const id of ["window-min", "window-max", "wide", "wide-hours", "show-flagged", "sort", "max-detour"]) {
     $(id).addEventListener("change", onChange);
   }
 }
@@ -269,9 +269,13 @@ async function go() {
     setStatus(`Route: ${route.totalMiles.toFixed(0)} mi, ${fmtDuration(route.totalSeconds)} via ${route.provider}${scaled}. Finding wards…`);
     const candidates = await findCandidates(route, state.filters, {
       loadTile,
+      matrix,
       routeDetour: routePlaces,
-      onProgress: (m) => setStatus(m),
-      maxDetourCalls: 40,
+      onProgress: (m, partial) => {
+        setStatus(m);
+        if (partial) { state.candidates = partial; render(); }
+      },
+      maxDetourBuildings: 200,
       concurrency: 2,
     });
     state.candidates = candidates;
@@ -416,7 +420,10 @@ function deltaWords(c) {
 }
 
 function detourWords(c) {
-  if (!c.routed) return { text: c.routeError ? "detour unknown" : "not routed (over the cap)", cls: "warn" };
+  if (!c.routed) {
+    if (c.routeError) return { text: "detour unknown", cls: "warn" };
+    return { text: c.needsDetour ? "not timed (over the cap)" : "not timed", cls: "warn" };
+  }
   const m = Math.round(c.detourMinutes);
   return { text: `+${m} min`, cls: m <= state.filters.maxDetourMin ? "good" : "bad" };
 }
