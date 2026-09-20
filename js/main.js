@@ -163,6 +163,7 @@ function bindFilters() {
   $("wide").checked = f.wide;
   $("wide-hours").value = f.wideHours;
   $("show-flagged").checked = !!f.showFlagged;
+  $("hide-misses").checked = f.hideMissesOnMap !== false;
   $("sort").value = f.sort;
   $("window-row").style.opacity = f.wide ? 0.5 : 1;
 
@@ -174,6 +175,7 @@ function bindFilters() {
     f.wide = $("wide").checked;
     f.wideHours = clamp(parseFloat($("wide-hours").value) || 2, 0.5, 6);
     f.showFlagged = $("show-flagged").checked;
+    f.hideMissesOnMap = $("hide-misses").checked;
     f.sort = $("sort").value;
     $("window-row").style.opacity = f.wide ? 0.5 : 1;
     saveFilters();
@@ -181,7 +183,7 @@ function bindFilters() {
     // detour can add candidates that were never timed; that needs a fresh search.
     if (state.candidates.length) render();
   };
-  for (const id of ["window-min", "window-max", "wide", "wide-hours", "show-flagged", "sort", "max-detour"]) {
+  for (const id of ["window-min", "window-max", "wide", "wide-hours", "show-flagged", "hide-misses", "sort", "max-detour"]) {
     $(id).addEventListener("change", onChange);
   }
 }
@@ -686,10 +688,12 @@ function render() {
   }
 
   // map: one marker per unit so a building with two units gets two pins,
-  // slightly offset, each carrying its own popup.
+  // slightly offset, each carrying its own popup. Near misses stay off the
+  // map by default; the one that's selected is always shown.
   clusterOn.clearLayers(); clusterOff.clearLayers(); state.markers.clear();
   const perBuilding = new Map();
   for (const c of list) {
+    if (!c.passes && state.filters.hideMissesOnMap && c.unit.id !== state.selectedId) continue;
     const k = perBuilding.get(c.building.id) || 0;
     perBuilding.set(c.building.id, k + 1);
     const jitter = k * 0.00025;
@@ -702,10 +706,17 @@ function render() {
 }
 
 function select(id, fromList) {
+  const previous = state.selectedId;
   state.selectedId = id;
   document.querySelectorAll(".result").forEach((li) => li.classList.toggle("selected", li.dataset.id === id));
-  const m = state.markers.get(id);
   const c = state.candidates.find((x) => x.unit.id === id);
+  // A hidden near miss gets its pin only while selected: rebuild the markers
+  // when the selection moves onto or off one.
+  if (state.filters.hideMissesOnMap && c && fromList) {
+    const prevC = state.candidates.find((x) => x.unit.id === previous);
+    if (!c.passes || (prevC && !prevC.passes)) renderMarkersOnly();
+  }
+  const m = state.markers.get(id);
   if (m && c) {
     m.setIcon(pinIcon(c.passes, true));
     if (fromList) {
@@ -718,6 +729,25 @@ function select(id, fromList) {
     if (li) li.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
   for (const [uid, mk] of state.markers) if (uid !== id) { const cc = state.candidates.find((x) => x.unit.id === uid); mk.setIcon(pinIcon(cc.passes, false)); }
+}
+
+// Redraw pins without touching the list (used when a selection reveals or
+// hides a near miss).
+function renderMarkersOnly() {
+  const list = reapply(state.candidates, state.filters);
+  clusterOn.clearLayers(); clusterOff.clearLayers(); state.markers.clear();
+  const perBuilding = new Map();
+  for (const c of list) {
+    if (!c.passes && state.filters.hideMissesOnMap && c.unit.id !== state.selectedId) continue;
+    const k = perBuilding.get(c.building.id) || 0;
+    perBuilding.set(c.building.id, k + 1);
+    const jitter = k * 0.00025;
+    const m = L.marker([c.building.lat + jitter, c.building.lng + jitter], { icon: pinIcon(c.passes, c.unit.id === state.selectedId), zIndexOffset: c.passes ? 1000 : 0 });
+    m.bindPopup(popupHtml(c), { maxWidth: 280 });
+    m.on("click", () => select(c.unit.id, false));
+    (c.passes ? clusterOn : clusterOff).addLayer(m);
+    state.markers.set(c.unit.id, m);
+  }
 }
 
 function highlight(id, on) {
@@ -907,6 +937,11 @@ function boot() {
   $("add-waypoint").addEventListener("click", () => { state.planLegSeconds = null; });
   restoreRouteInput();
   wireInfoHints();
+  // iOS Safari ignores user-scalable=no; block pinch on the panel here. The
+  // map keeps its own pinch handling.
+  const panel = document.querySelector(".panel");
+  for (const ev of ["gesturestart", "gesturechange", "gestureend"]) panel.addEventListener(ev, (e) => e.preventDefault());
+  panel.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   $("go").addEventListener("click", go);
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "text") go(); });
   loadDataset();

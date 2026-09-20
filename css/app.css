@@ -33,7 +33,7 @@ button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 
 .app { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; height: 100%; }
-.panel { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; min-width: 0; background: var(--panel); border-right: 1px solid var(--line); padding: 16px; }
+.panel { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; min-width: 0; touch-action: pan-y; background: var(--panel); border-right: 1px solid var(--line); padding: 16px; }
 .panel > * { max-width: 100%; }
 body { overflow-x: hidden; }
 .map { min-height: 300px; }
@@ -59,6 +59,14 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 .row { display: flex; gap: 8px; align-items: end; }
 .row > .field { flex: 1; margin-bottom: 0; }
 .row.tight { align-items: center; }
+/* Inputs inside a button row must be allowed to shrink; iOS date inputs
+   otherwise keep their intrinsic width and run off the right edge. */
+.row.tight > input { flex: 1 1 0; min-width: 0; width: auto; max-width: 100%; }
+.row.tight > .btn { flex: 0 0 auto; }
+/* Icon buttons beside a text box match its height. */
+.row.tight > .btn.icon { align-self: stretch; display: inline-flex; align-items: center; justify-content: center; min-width: 38px; padding: 0 10px; }
+/* Small number boxes inside toggle labels use the same field styling. */
+.toggle input[type="number"] { width: 60px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
 .inline { display: inline-flex; gap: 6px; align-items: center; }
 
 .btn { padding: 8px 12px; border: 1px solid var(--line); background: var(--bg); border-radius: var(--radius); }

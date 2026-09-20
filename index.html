@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/app.css?v=2026092009">
+  <link rel="stylesheet" href="css/app.css?v=2026092011">
   <!-- Cache busting without a build step. GitHub Pages serves everything with
        max-age=600, so a phone that opened the app minutes before a deploy keeps
        running the old scripts. Bump the version on every deploy; the import
@@ -16,13 +16,13 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/abrp.js":      "./js/abrp.js?v=2026092009",
-      "./js/finder.js":    "./js/finder.js?v=2026092009",
-      "./js/geo.js":       "./js/geo.js?v=2026092009",
-      "./js/geocode.js":   "./js/geocode.js?v=2026092009",
-      "./js/providers.js": "./js/providers.js?v=2026092009",
-      "./js/routing.js":   "./js/routing.js?v=2026092009",
-      "./js/tz.js":        "./js/tz.js?v=2026092009"
+      "./js/abrp.js":      "./js/abrp.js?v=2026092011",
+      "./js/finder.js":    "./js/finder.js?v=2026092011",
+      "./js/geo.js":       "./js/geo.js?v=2026092011",
+      "./js/geocode.js":   "./js/geocode.js?v=2026092011",
+      "./js/providers.js": "./js/providers.js?v=2026092011",
+      "./js/routing.js":   "./js/routing.js?v=2026092011",
+      "./js/tz.js":        "./js/tz.js?v=2026092011"
     }
   }
   </script>
@@ -124,8 +124,9 @@
         <div class="field"><label for="window-max">to</label><input id="window-max" type="number" min="-180" max="60" step="1"></div>
       </div>
       <label class="toggle"><input id="wide" type="checkbox"> Wide mode: anything starting within
-        <input id="wide-hours" type="number" min="0.5" max="6" step="0.5" style="width:60px"> h of arrival (EV / long stops)</label>
+        <input id="wide-hours" type="number" min="0.5" max="6" step="0.5"> h of arrival (EV / long stops)</label>
       <label class="toggle"><input id="show-flagged" type="checkbox"> Show units with data problems (missing or implausible times, restricted access)</label>
+      <label class="toggle"><input id="hide-misses" type="checkbox"> Keep near misses off the map (tap one in the list to show it)</label>
     </div>
 
     <button class="btn primary" id="go">Find wards</button>
@@ -149,6 +150,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script type="module" src="js/main.js?v=2026092009"></script>
+<script type="module" src="js/main.js?v=2026092011"></script>
 </body>
 </html>

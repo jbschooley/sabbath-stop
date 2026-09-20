@@ -37,6 +37,7 @@ export const DEFAULT_FILTERS = {
   wide: false,
   wideHours: 2,
   showFlagged: false,    // units with data-quality flags are hidden unless asked for
+  hideMissesOnMap: true, // near misses stay in the list but off the map until tapped
   sort: "best",          // best | arrival | earliest | distance
 };
 
