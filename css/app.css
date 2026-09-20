@@ -93,6 +93,20 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 .warn { color: var(--warn); }
 .err { color: var(--bad); }
 .hint.err { font-size: 13.5px; font-weight: 600; margin-top: 6px; }
+.hint.info { margin-top: 6px; padding: 6px 8px; background: var(--bg); border-radius: var(--radius); }
+.info-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px;
+  margin-left: 6px; padding: 0; border: 1px solid var(--muted); border-radius: 50%; background: none;
+  color: var(--muted); font: italic 700 10px/1 Georgia, serif; vertical-align: middle; cursor: pointer;
+}
+.info-btn[aria-expanded="true"] { background: var(--muted); color: var(--panel); }
+.spinner {
+  display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent);
+  border-radius: 50%; vertical-align: middle; animation: spin .8s linear infinite;
+}
+.btn.primary .spinner { border-color: rgba(255,255,255,.35); border-top-color: var(--accent-ink); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.route-summary { font-size: 13px; margin: 8px 0; padding: 8px 10px; background: var(--bg); border-radius: var(--radius); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; cursor: pointer; background: var(--bg); }

@@ -35,7 +35,9 @@ async function resolvePlaces(specs) {
   for (const s of specs) {
     if (typeof s.lng === "number" && typeof s.lat === "number") { out.push(s); continue; }
     const hit = await geocodeOne(s.query);
-    out.push({ ...hit, name: s.name || hit.name });
+    // Keep what came with the request (dwellSeconds, etc.); take coordinates
+    // and any missing name from the hit.
+    out.push({ ...s, ...hit, name: s.name || hit.name });
   }
   return out;
 }

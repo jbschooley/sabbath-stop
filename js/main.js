@@ -297,10 +297,13 @@ async function importLink() {
   if (!url) throw new Error("Paste a directions link.");
   if (looksLikeAbrpFile(url)) {
     setStatus("Fetching the ABRP export…");
-    let resp;
-    try { resp = await fetch(url); } catch { throw new Error("Couldn't download the ABRP export. Download it yourself and use the File / ABRP tab."); }
-    if (!resp.ok) throw new Error(`ABRP returned HTTP ${resp.status} for that export link.`);
-    return importAbrp(await resp.arrayBuffer());
+    setLinkBusy(true);
+    try {
+      let resp;
+      try { resp = await fetch(url); } catch { throw new Error("Couldn't download the ABRP export. Download it yourself and use the File / ABRP tab."); }
+      if (!resp.ok) throw new Error(`ABRP returned HTTP ${resp.status} for that export link.`);
+      return await importAbrp(await resp.arrayBuffer());
+    } finally { setLinkBusy(false); }
   }
   const { places, departure } = parseLink(url);
 
@@ -346,7 +349,7 @@ async function importAbrp(fileOrBuffer) {
   const buf = fileOrBuffer instanceof ArrayBuffer ? fileOrBuffer : await fileOrBuffer.arrayBuffer();
   const plan = await parseAbrpXlsx(buf);
   const places = plan.stops.map((s) => (isUnresolvableName(s.rawName) ? null : { query: s.name, name: s.name }));
-  const dwellMins = plan.stops.slice(1, -1).map((s) => (s.chargeSeconds ? Math.round(s.chargeSeconds / 60) : ""));
+  const dwellMins = plan.stops.slice(1, -1).map((s) => (s.dwellSeconds ? Math.round(s.dwellSeconds / 60) : ""));
   // ABRP gives a clock time for departure but no date: use the date already
   // in the picker.
   let departure = null;
@@ -393,9 +396,17 @@ async function buildRoute() {
   const o = state.places.origin || ($("origin").value.trim() ? { query: $("origin").value.trim() } : null);
   const d = state.places.destination || ($("destination").value.trim() ? { query: $("destination").value.trim() } : null);
   if (!o || !d) throw new Error("Enter where you're starting and where you're going.");
-  const vias = state.places.waypoints
-    .map((p, i) => (p ? { ...p, dwellSeconds: (state.places.dwellMin[i] || 0) * 60 } : null))
-    .filter(Boolean);
+  // Stops come from their rows in order: a picked place if there is one,
+  // otherwise the typed text to geocode on submit, same as From and To.
+  const vias = [];
+  for (const row of document.querySelectorAll("#waypoints .field")) {
+    const idx = Number(row.dataset.idx);
+    const text = row.querySelector("input[type=text]").value.trim();
+    const picked = state.places.waypoints[idx];
+    const place = picked || (text ? { query: text, name: text } : null);
+    if (!place) continue;
+    vias.push({ ...place, dwellSeconds: (state.places.dwellMin[idx] || 0) * 60 });
+  }
   return fromPlaces([o, ...vias, d], departure);
 }
 
@@ -452,7 +463,7 @@ function applyTrafficTime(route) {
 async function go() {
   if (!state.filters.subtypes.length) return setStatus("Pick at least one unit type first.", true);
   const btn = $("go");
-  btn.disabled = true;
+  setBusy(btn, true, "Finding…");
   clearResults();
   try {
     setStatus("Routing…");
@@ -465,9 +476,8 @@ async function go() {
     applyTrafficTime(route);
     state.route = route;
     drawRoute(route);
-    const scaled = route.timingNote ? ` (${route.timingNote})` : "";
-    const dwell = route.dwellSeconds ? ` plus ${fmtDuration(route.dwellSeconds)} at stops` : "";
-    setStatus(`Route: ${route.totalMiles.toFixed(0)} mi, ${fmtDuration(route.totalSeconds - (route.dwellSeconds || 0))} driving${dwell} via ${route.provider}${scaled}. Finding wards…`);
+    renderRouteSummary(route);
+    setStatus("Finding wards…");
     const candidates = await findCandidates(route, state.filters, {
       loadTile,
       matrix,
@@ -487,8 +497,25 @@ async function go() {
     console.error(e);
     setStatus(e.message || String(e), true);
   } finally {
-    btn.disabled = false;
+    setBusy(btn, false);
   }
+}
+
+// The route line persists above the results; the status line is transient.
+function renderRouteSummary(route) {
+  const el = $("route-summary");
+  const dwell = route.dwellSeconds || 0;
+  const arrive = new Date(route.departure.getTime() + route.totalSeconds * 1000);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const parts = [
+    `${route.totalMiles.toFixed(0)} mi`,
+    `${fmtDuration(route.totalSeconds - dwell)} driving`,
+  ];
+  if (dwell) parts.push(`${fmtDuration(dwell)} at stops`, `${fmtDuration(route.totalSeconds)} total`);
+  parts.push(`arrive ${fmtDateTime(arrive, tz)} ${tzAbbrev(arrive, tz)} (your time zone)`);
+  if (route.timingNote) parts.push(route.timingNote);
+  el.textContent = parts.join(" · ");
+  el.hidden = false;
 }
 
 // ---------------------------------------------------------------- render
@@ -536,6 +563,7 @@ function clearResults() {
   clusterOff.clearLayers();
   $("results").innerHTML = "";
   $("summary").textContent = "";
+  $("route-summary").hidden = true;
 }
 
 function pinIcon(on, selected) {
@@ -698,6 +726,42 @@ function showFieldError(id, msg) {
   el.hidden = !msg;
   if (msg) setStatus(msg, true);
 }
+// Busy state for a button: disabled, spinner, optional label swap.
+function setBusy(btn, busy, label) {
+  if (busy) {
+    btn.dataset.label = btn.dataset.label || btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner" aria-hidden="true"></span> ${escapeHtml(label || btn.dataset.label)}`;
+  } else {
+    btn.disabled = false;
+    btn.textContent = btn.dataset.label || btn.textContent;
+  }
+}
+function setLinkBusy(busy) {
+  setBusy($("import-link"), busy, busy ? "Fetching…" : undefined);
+}
+// Informational hints start hidden behind a small (i) button on the label.
+function wireInfoHints() {
+  for (const hint of document.querySelectorAll(".hint.info")) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "info-btn";
+    btn.textContent = "i";
+    btn.setAttribute("aria-label", "More information");
+    btn.setAttribute("aria-expanded", "false");
+    hint.hidden = true;
+    btn.addEventListener("click", () => {
+      hint.hidden = !hint.hidden;
+      btn.setAttribute("aria-expanded", String(!hint.hidden));
+    });
+    const field = hint.closest(".field");
+    const label = field && field.querySelector("label");
+    const prev = hint.previousElementSibling;
+    if (label) label.appendChild(btn);
+    else if (prev && prev.tagName === "BUTTON") prev.after(btn);
+    else hint.parentNode.insertBefore(btn, hint);
+  }
+}
 function fmtDuration(sec) {
   const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
   return h ? `${h} h ${m} min` : `${m} min`;
@@ -744,6 +808,7 @@ function boot() {
   // Editing stops by hand invalidates per-leg times from an export.
   $("add-waypoint").addEventListener("click", () => { state.planLegSeconds = null; });
   restoreRouteInput();
+  wireInfoHints();
   $("go").addEventListener("click", go);
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "text") go(); });
   loadDataset();

@@ -132,13 +132,25 @@ export function parseAbrpRows(rows) {
     const a = r.A || "";
     if (!a) continue;
     if (parseAbrpDuration(a) !== null && !(cArr && r[cArr]) && !(cDep && r[cDep])) { totals = r; break; }
+    const chargeSeconds = parseAbrpDuration(cCharge && r[cCharge]) || 0;
+    const arrivalMin = parseClock(cArr && r[cArr]);
+    const departureMin = parseClock(cDep && r[cDep]);
+    // Time actually spent at the stop. ABRP's clock gap runs a few minutes
+    // longer than "Charge duration" (plugging in, walking), and the clock is
+    // what its arrival times are built from, so prefer the gap.
+    let dwellSeconds = chargeSeconds;
+    if (arrivalMin !== null && departureMin !== null) {
+      const gap = ((departureMin - arrivalMin + 1440) % 1440) * 60;
+      if (gap > 0 && gap < 12 * 3600) dwellSeconds = gap;
+    }
     stops.push({
       rawName: a,
       name: cleanStopName(a),
-      chargeSeconds: parseAbrpDuration(cCharge && r[cCharge]) || 0,
+      chargeSeconds,
+      dwellSeconds,
       driveSecondsToNext: parseAbrpDuration(cDrive && r[cDrive]),
-      arrivalMin: parseClock(cArr && r[cArr]),
-      departureMin: parseClock(cDep && r[cDep]),
+      arrivalMin,
+      departureMin,
     });
   }
   if (stops.length < 2) throw new Error("ABRP export has fewer than two stops.");

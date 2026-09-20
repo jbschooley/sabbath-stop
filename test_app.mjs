@@ -423,6 +423,8 @@ test("parseAbrpRows extracts stops, charge time, per-leg drive time and clock ti
   assert.equal(plan.stops.length, 3);
   assert.deepEqual(plan.stops.map((s) => s.name), ["Point on map", "Tesla Supercharger Sandy, UT", "Provo, UT & Orem"]);
   assert.deepEqual(plan.stops.map((s) => s.chargeSeconds), [0, 300, 0]);
+  // Sandy: arrive 4:40, depart 4:50 -> the clock gap (10 min) beats the 5-min charge figure.
+  assert.deepEqual(plan.stops.map((s) => s.dwellSeconds), [0, 600, 0]);
   assert.deepEqual(plan.stops.map((s) => s.driveSecondsToNext), [1860, 2160, null]);
   assert.equal(plan.stops[0].departureMin, 16 * 60 + 9);
   assert.equal(plan.stops[2].arrivalMin, 17 * 60 + 26);
