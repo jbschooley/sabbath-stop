@@ -1,0 +1,15 @@
+# Harvest artifacts — regenerated, never committed by hand.
+raw/
+raw/checkpoint.json
+
+# Generated dataset. The refresh workflow commits data/ from CI;
+# keep local builds out of your own commits.
+data/
+
+__pycache__/
+*.pyc
+.DS_Store
+
+# IDE
+.idea/
+*.iml

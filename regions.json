@@ -1,0 +1,38 @@
+[
+  {
+    "name": "conus",
+    "description": "Continental United States",
+    "bbox": [-125.0, 24.0, -66.5, 49.5],
+    "default": true
+  },
+  {
+    "name": "alaska",
+    "description": "Alaska",
+    "bbox": [-170.0, 51.0, -129.0, 72.0],
+    "default": true
+  },
+  {
+    "name": "hawaii",
+    "description": "Hawaiian Islands",
+    "bbox": [-161.0, 18.5, -154.5, 22.5],
+    "default": true
+  },
+  {
+    "name": "canada",
+    "description": "Canada. Opt in with --only; roughly doubles runtime.",
+    "bbox": [-141.0, 41.5, -52.0, 70.0],
+    "default": false
+  },
+  {
+    "name": "mexico",
+    "description": "Mexico. Opt in with --only.",
+    "bbox": [-118.5, 14.0, -86.0, 33.0],
+    "default": false
+  },
+  {
+    "name": "utah-test",
+    "description": "Utah only. Validation region: ~300 calls, ~2100 buildings, under a minute.",
+    "bbox": [-114.1, 37.0, -109.0, 42.0],
+    "default": false
+  }
+]

@@ -1,0 +1,92 @@
+name: Refresh meetinghouse dataset
+
+# Monthly, not nightly. The upstream locator is a public service with no API
+# contract; a slow cadence is part of being a good citizen. Unit boundaries and
+# meeting times change on the order of months anyway.
+on:
+  schedule:
+    - cron: "17 9 1 * *"   # 09:17 UTC on the 1st of each month
+  workflow_dispatch:
+    inputs:
+      regions:
+        description: "Space-separated region names (blank = defaults)"
+        required: false
+        default: ""
+      rate:
+        description: "Max requests/sec"
+        required: false
+        default: "5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-dataset
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: python3 test_harvest.py
+
+      # Fail fast and loudly if the upstream API stops answering. If this
+      # step 401s, the job stops here by design -- see "Access" in harvest.py.
+      - name: Preflight API access
+        run: python3 harvest.py --preflight
+
+      - name: Harvest
+        run: |
+          python3 harvest.py \
+            --rate "${{ github.event.inputs.rate || '5' }}" \
+            ${{ github.event.inputs.regions && format('--only {0}', github.event.inputs.regions) || '' }}
+
+      # Independent cross-check against a DIFFERENT endpoint (clusters) before
+      # publishing. Catches the failure mode a self-consistent sweep cannot:
+      # the sweep being systematically wrong.
+      - name: Verify coverage
+        run: python3 verify.py --max-missing 5
+
+      # min-buildings guards against a partial or degraded harvest silently
+      # replacing a good dataset. The first full run (2026-09-20, CONUS +
+      # Alaska + Hawaii) found 7,442 buildings; the floor sits a little below.
+      - name: Build tiles
+        run: python3 build_tiles.py --gzip --min-buildings 7000
+
+      - name: Summarize
+        run: |
+          {
+            echo '## Dataset refresh'
+            echo '```'
+            python3 -c "import json;m=json.load(open('data/manifest.json'));print(json.dumps(m['counts'],indent=2));print('generated:',m['generated'])"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "No dataset changes."
+            exit 0
+          fi
+          COUNTS=$(python3 -c "import json;m=json.load(open('data/manifest.json'));c=m['counts'];print(f\"{c['buildings']} buildings, {c['units']} units\")")
+          git commit -m "data: monthly refresh ($COUNTS)"
+          git push
+
+      - name: Upload dataset artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dataset
+          path: data/
+          retention-days: 14
