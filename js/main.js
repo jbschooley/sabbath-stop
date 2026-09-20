@@ -5,10 +5,12 @@ import { DEFAULT_FILTERS, findCandidates, reapply } from "./finder.js";
 import { debounce, reverse, suggest } from "./geocode.js";
 import { fromAppleUrl, fromGoogleUrl, fromPlaces, fromTrackFile, looksLikeApple, looksLikeGoogle } from "./providers.js";
 import { matrix, routePlaces } from "./routing.js";
-import { defaultDepartureLocal, fmtDateTime, fmtHHMM, parseDuration, tzAbbrev } from "./tz.js";
+import { defaultDepartureLocal, fmtDateTime, fmtHHMM, parseDuration, toDatetimeLocal, tzAbbrev } from "./tz.js";
 
 const $ = (id) => document.getElementById(id);
 const FILTERS_KEY = "ss:filters";
+const DEPART_KEY = "ss:departure";
+const ROUTE_INPUT_KEY = "ss:route-input";
 const TOP_SUBTYPES = ["CONVENTIONAL", "YSA", "YSA_JR", "YSA_SR", "SPANISH", "STUDENT_MARRIED"];
 const MAX_MISSES_LISTED = 40;
 
@@ -34,6 +36,56 @@ function loadFilters() {
 }
 function saveFilters() {
   try { localStorage.setItem(FILTERS_KEY, JSON.stringify(state.filters)); } catch { /* ignore */ }
+}
+
+// A departure still in the future is worth keeping across reloads; one in
+// the past is stale and the picker goes back to now.
+function initialDepartureLocal() {
+  try {
+    const saved = localStorage.getItem(DEPART_KEY);
+    if (saved && new Date(saved) > new Date()) return saved;
+  } catch { /* ignore */ }
+  return defaultDepartureLocal();
+}
+// Origin, stops, destination, pasted link and which tab is active. Typed text
+// that never became a picked place is kept as text so it comes back as typed.
+function saveRouteInput() {
+  try {
+    const rows = [...document.querySelectorAll("#waypoints .field")];
+    const snap = {
+      mode: state.routeMode,
+      originText: $("origin").value,
+      origin: state.places.origin,
+      destinationText: $("destination").value,
+      destination: state.places.destination,
+      waypoints: rows.map((row, i) => ({ text: row.querySelector("input").value, place: state.places.waypoints[row.dataset.idx] || null })),
+      link: $("link").value,
+      trafficTime: $("traffic-time").value,
+    };
+    localStorage.setItem(ROUTE_INPUT_KEY, JSON.stringify(snap));
+  } catch { /* ignore */ }
+}
+function restoreRouteInput() {
+  let snap = null;
+  try { snap = JSON.parse(localStorage.getItem(ROUTE_INPUT_KEY) || "null"); } catch { /* ignore */ }
+  if (!snap) return;
+  $("origin").value = snap.originText || "";
+  state.places.origin = snap.origin || null;
+  $("destination").value = snap.destinationText || "";
+  state.places.destination = snap.destination || null;
+  for (const w of snap.waypoints || []) addWaypointRow(w.place, w.text);
+  $("link").value = snap.link || "";
+  $("traffic-time").value = snap.trafficTime || "";
+  if (snap.mode && snap.mode !== "ab") {
+    const btn = document.querySelector(`[role="tab"][data-tab="${snap.mode}"]`);
+    if (btn) btn.click();
+  }
+}
+function saveDeparture(value) {
+  try {
+    if (value && new Date(value) > new Date()) localStorage.setItem(DEPART_KEY, value);
+    else localStorage.removeItem(DEPART_KEY);
+  } catch { /* ignore */ }
 }
 
 // ---------------------------------------------------------------- dataset
@@ -130,6 +182,7 @@ function bindTabs() {
       document.querySelectorAll('[role="tab"]').forEach((b) => b.setAttribute("aria-selected", b === btn));
       document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.id === `tab-${btn.dataset.tab}`));
       state.routeMode = btn.dataset.tab;
+      saveRouteInput();
     });
   });
   state.routeMode = "ab";
@@ -147,9 +200,10 @@ function attachSuggest(input, list, onPick) {
     list.hidden = places.length === 0;
     [...list.children].forEach((li, i) => li.addEventListener("mousedown", (e) => { e.preventDefault(); pick(i); }));
   };
-  const pick = (i) => { const p = items[i]; if (!p) return; input.value = p.name; onPick(p); close(); };
+  const pick = (i) => { const p = items[i]; if (!p) return; input.value = p.name; onPick(p); close(); saveRouteInput(); };
   input.addEventListener("input", async () => {
     onPick(null); // typed text invalidates any previous pick
+    saveRouteInput();
     const q = input.value;
     if (q.trim().length < 3) return close();
     try { const res = await run(q); if (input.value === q) show(res); } catch { close(); }
@@ -167,17 +221,18 @@ function attachSuggest(input, list, onPick) {
   input.addEventListener("blur", () => setTimeout(close, 150));
 }
 
-function addWaypointRow(prefill) {
+function addWaypointRow(prefill, text) {
   const wrap = $("waypoints");
   const idx = state.places.waypoints.length;
   state.places.waypoints.push(prefill || null);
   const row = document.createElement("div");
   row.className = "field suggest";
+  row.dataset.idx = idx;
   row.innerHTML = `<label>Via</label><div class="row tight"><input type="text" placeholder="Optional stop" autocomplete="off"><button class="btn icon" title="Remove" aria-label="Remove stop">×</button></div><ul hidden></ul>`;
   const input = row.querySelector("input"), list = row.querySelector("ul");
-  if (prefill) input.value = prefill.name;
+  input.value = text ?? (prefill ? prefill.name : "");
   attachSuggest(input, list, (p) => { state.places.waypoints[idx] = p; });
-  row.querySelector("button").addEventListener("click", () => { state.places.waypoints[idx] = undefined; row.remove(); });
+  row.querySelector("button").addEventListener("click", () => { state.places.waypoints[idx] = undefined; row.remove(); saveRouteInput(); });
   wrap.appendChild(row);
 }
 
@@ -200,6 +255,7 @@ async function useMyLocation() {
         $("origin").value = state.places.origin.name;
         setStatus("");
       }
+      saveRouteInput();
       btn.disabled = false;
     },
     (err) => { setStatus(`Couldn't get your location (${err.message}). Type it instead.`, true); btn.disabled = false; },
@@ -262,11 +318,17 @@ async function go() {
   try {
     setStatus("Routing…");
     const route = await buildRoute();
+    if (route.departureFromLink || (route.source === "gpx" && route.provider === "file")) {
+      // The link or file carried its own departure; show it in the picker.
+      $("departure").value = toDatetimeLocal(route.departure);
+      saveDeparture($("departure").value);
+    }
     applyTrafficTime(route);
     state.route = route;
     drawRoute(route);
     const scaled = route.timeScale && route.timeScale !== 1 ? ` (scaled ×${route.timeScale.toFixed(2)} to your Maps time)` : "";
-    setStatus(`Route: ${route.totalMiles.toFixed(0)} mi, ${fmtDuration(route.totalSeconds)} via ${route.provider}${scaled}. Finding wards…`);
+    const fromLink = route.departureFromLink ? " Departure taken from the link." : "";
+    setStatus(`Route: ${route.totalMiles.toFixed(0)} mi, ${fmtDuration(route.totalSeconds)} via ${route.provider}${scaled}.${fromLink} Finding wards…`);
     const candidates = await findCandidates(route, state.filters, {
       loadTile,
       matrix,
@@ -501,14 +563,18 @@ function escapeAttr(s) { return escapeHtml(s); }
 // ---------------------------------------------------------------- boot
 
 function boot() {
-  $("departure").value = defaultDepartureLocal();
+  $("departure").value = initialDepartureLocal();
+  $("departure").addEventListener("change", () => saveDeparture($("departure").value));
   initMap();
   bindTabs();
   bindFilters();
   attachSuggest($("origin"), $("origin-suggest"), (p) => { state.places.origin = p; });
   attachSuggest($("destination"), $("destination-suggest"), (p) => { state.places.destination = p; });
-  $("add-waypoint").addEventListener("click", () => addWaypointRow());
+  $("add-waypoint").addEventListener("click", () => { addWaypointRow(); saveRouteInput(); });
   $("use-location").addEventListener("click", useMyLocation);
+  $("link").addEventListener("input", saveRouteInput);
+  $("traffic-time").addEventListener("change", saveRouteInput);
+  restoreRouteInput();
   $("go").addEventListener("click", go);
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "text") go(); });
   loadDataset();

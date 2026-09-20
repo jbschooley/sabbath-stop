@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexBuckets } from "./js/geo.js";
 import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, parseDuration, defaultDepartureLocal } from "./js/tz.js";
 import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute } from "./js/finder.js";
-import { parseGoogleUrl, parseAppleUrl } from "./js/providers.js";
+import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture } from "./js/providers.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -274,6 +274,13 @@ test("Google URL with coordinates yields lat/lng places", () => {
 });
 test("short Google links are refused with a helpful message", () => {
   assert.throws(() => parseGoogleUrl("https://maps.app.goo.gl/abc123"), /paste the full/);
+});
+test("Google depart-at time is read from the data blob, arrive-by is not", () => {
+  const base = "https://www.google.com/maps/dir/Salt+Lake+City,+UT/St.+George,+UT/@38.5,-112.3,8z/data=!4m8!4m7!1m1!4e1!1m1!4e1!2m3!6e0!7e2!8j1790330400";
+  assert.equal(parseGoogleDeparture(base).getTime(), 1790330400 * 1000);
+  assert.equal(parseGoogleDeparture(base.replace("!6e0", "!6e1")), null);
+  assert.equal(parseGoogleDeparture("https://www.google.com/maps/dir/A/B/"), null);
+  assert.equal(parseGoogleDeparture("https://www.google.com/maps/dir/A/B/data=!8j12"), null);
 });
 test("Apple Maps link parses saddr and daddr", () => {
   const p = parseAppleUrl("https://maps.apple.com/?saddr=Salt+Lake+City&daddr=37.1,-113.58&dirflg=d");

@@ -74,8 +74,24 @@ export function parseGoogleUrl(url) {
   return places;
 }
 
+// Google's expanded directions URLs carry a chosen time inside the data blob
+// as "!8j<epoch seconds>", with "!6e0" meaning depart-at and "!6e1" arrive-by.
+// Only depart-at is a departure. The share-link form (?api=1) and Apple Maps
+// links carry no time at all. Returns a Date or null.
+export function parseGoogleDeparture(url) {
+  const m = /!8j(\d{9,11})(?:!|$)/.exec(url);
+  if (!m) return null;
+  if (/!6e1(?:!|$)/.test(url)) return null; // arrive-by, not a departure
+  const d = new Date(parseInt(m[1], 10) * 1000);
+  const y = d.getUTCFullYear();
+  return y >= 2020 && y < 2100 ? d : null;
+}
+
 export async function fromGoogleUrl(url, departure) {
-  return routeThrough("google", await resolvePlaces(parseGoogleUrl(url)), departure);
+  const fromLink = parseGoogleDeparture(url);
+  const route = await routeThrough("google", await resolvePlaces(parseGoogleUrl(url)), fromLink || departure);
+  if (fromLink) route.departureFromLink = true;
+  return route;
 }
 
 // ---------------------------------------------------------------- Apple Maps link
