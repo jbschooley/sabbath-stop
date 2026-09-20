@@ -7,6 +7,8 @@ import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexB
 import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal } from "./js/tz.js";
 import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS } from "./js/finder.js";
 import { dwellBefore, applyDwell } from "./js/routing.js";
+import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
+import { deflateRawSync } from "node:zlib";
 import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes } from "./js/providers.js";
 
 let passed = 0, failed = 0;
@@ -357,11 +359,107 @@ test("parseLink routes to the right parser and carries the Google departure", ()
   assert.equal(a.departure, null);
   assert.throws(() => parseLink("https://example.com/"), /doesn't look like/);
 });
+test("Google ?saddr/daddr form (what ABRP emits) parses with chained stops", () => {
+  const p = parseGoogleUrl("https://www.google.com/maps?daddr=40.5884056,-111.9092865+to:40.2969000,-111.6946000&saddr=41.0081160,-111.9342200&dirflg=d&geocode=x;y;z");
+  assert.equal(p.length, 3);
+  assert.ok(Math.abs(p[0].lat - 41.008116) < 1e-9 && Math.abs(p[0].lng + 111.93422) < 1e-9, "origin from saddr");
+  assert.ok(Math.abs(p[1].lat - 40.5884056) < 1e-9, "first stop");
+  assert.ok(Math.abs(p[2].lat - 40.2969) < 1e-9, "destination");
+  const noStart = parseGoogleUrl("https://www.google.com/maps?daddr=40.5,-111.9&dirflg=d");
+  assert.equal(noStart[0], null);
+});
 test("defaultDwellMinutes: Superchargers get 15, everything else 0", () => {
   assert.equal(defaultDwellMinutes({ query: "Tesla Supercharger, Beaver, UT" }), 15);
   assert.equal(defaultDwellMinutes({ name: "Beaver Supercharger" }), 15);
   assert.equal(defaultDwellMinutes({ query: "Beaver, UT" }), 0);
   assert.equal(defaultDwellMinutes(null), 0);
+});
+
+console.log("abrp");
+test("parseAbrpDuration and parseClock read ABRP's text formats", () => {
+  assert.equal(parseAbrpDuration("1 h 7 min"), 4020);
+  assert.equal(parseAbrpDuration("36 min"), 2160);
+  assert.equal(parseAbrpDuration("2 h"), 7200);
+  assert.equal(parseAbrpDuration("58 mi"), null);
+  assert.equal(parseAbrpDuration(""), null);
+  assert.equal(parseClock("4:09 PM"), 16 * 60 + 9);
+  assert.equal(parseClock("12:05 AM"), 5);
+  assert.equal(parseClock("12:30 PM"), 12 * 60 + 30);
+  assert.equal(parseClock("31 mi"), null);
+});
+test("cleanStopName strips bracketed tags; isUnresolvableName spots placeholders", () => {
+  assert.equal(cleanStopName("Tesla Supercharger [Saini Charge] Sandy, UT [Tesla]"), "Tesla Supercharger Sandy, UT");
+  assert.ok(isUnresolvableName("Home") && isUnresolvableName("Point on map") && !isUnresolvableName("Provo, UT"));
+});
+
+// A sheet shaped exactly like ABRP's export, as inline-string cells.
+const cell = (ref, v, t = "inlineStr") => (t === "n" ? `<c r="${ref}" t="n"><v>${v}</v></c>` : `<c r="${ref}" t="inlineStr"><is><t>${v}</t></is></c>`);
+const SHEET_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>
+<row r="1">${cell("A1", "ABRP Plan")}</row>
+<row r="2">${cell("A2", "https://abetterrouteplanner.com/?plan_uuid=2-abc")}</row>
+<row r="4">${["Waypoint", "Arrival SoC", "Depart SoC", "Cost", "Charge Card", "Charge duration", "Distance", "Drive duration", "Arrival", "Departure"].map((h, i) => cell(String.fromCharCode(65 + i) + "4", h)).join("")}</row>
+<row r="5">${cell("A5", "Point on map")}${cell("C5", "0.26", "n")}${cell("G5", "31 mi")}${cell("H5", "31 min")}${cell("J5", "4:09 PM")}</row>
+<row r="6">${cell("A6", "Tesla Supercharger [Saini Charge] Sandy, UT [Tesla]")}${cell("B6", "0.14", "n")}${cell("F6", "5 min")}${cell("G6", "26 mi")}${cell("H6", "36 min")}${cell("I6", "4:40 PM")}${cell("J6", "4:50 PM")}</row>
+<row r="7">${cell("A7", "Provo, UT &amp; Orem")}${cell("B7", "0.21", "n")}${cell("G7", "0 ft")}${cell("I7", "5:26 PM")}</row>
+<row r="8">${cell("A8", "1 h 16 min")}${cell("D8", "$0.00")}${cell("F8", "5 min")}${cell("G8", "58 mi")}${cell("H8", "1 h 7 min")}</row>
+</sheetData></worksheet>`;
+
+test("parseSheetRows reads inline strings, numbers and entities", () => {
+  const rows = parseSheetRows(SHEET_XML);
+  assert.equal(rows[0].A, "ABRP Plan");
+  assert.equal(rows[3].C, "0.26");
+  assert.equal(rows[5].A, "Provo, UT & Orem");
+});
+test("parseAbrpRows extracts stops, charge time, per-leg drive time and clock times", () => {
+  const plan = parseAbrpRows(parseSheetRows(SHEET_XML));
+  assert.equal(plan.planUrl, "https://abetterrouteplanner.com/?plan_uuid=2-abc");
+  assert.equal(plan.stops.length, 3);
+  assert.deepEqual(plan.stops.map((s) => s.name), ["Point on map", "Tesla Supercharger Sandy, UT", "Provo, UT & Orem"]);
+  assert.deepEqual(plan.stops.map((s) => s.chargeSeconds), [0, 300, 0]);
+  assert.deepEqual(plan.stops.map((s) => s.driveSecondsToNext), [1860, 2160, null]);
+  assert.equal(plan.stops[0].departureMin, 16 * 60 + 9);
+  assert.equal(plan.stops[2].arrivalMin, 17 * 60 + 26);
+  assert.equal(plan.totalDriveSeconds, 4020);
+  assert.equal(plan.totalSeconds, 4560);
+});
+
+// Minimal zip writer for the test: one deflated entry, CRC left zero because
+// the reader does not check it.
+function zipWith(entries) {
+  const parts = [];
+  for (const [name, text] of entries) {
+    const nameBytes = new TextEncoder().encode(name);
+    const raw = new TextEncoder().encode(text);
+    const comp = deflateRawSync(raw);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0, true); h.setUint16(8, 8, true);
+    h.setUint32(18, comp.length, true); h.setUint32(22, raw.length, true); h.setUint16(26, nameBytes.length, true); h.setUint16(28, 0, true);
+    parts.push(new Uint8Array(h.buffer), nameBytes, new Uint8Array(comp));
+  }
+  const total = parts.reduce((a, p) => a + p.length, 0);
+  const out = new Uint8Array(total + 22);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  new DataView(out.buffer).setUint32(o, 0x06054b50, true); // end of central directory marker
+  return out.buffer;
+}
+
+await atest("readZipEntry inflates a deflated entry and parseAbrpXlsx reads the whole file", async () => {
+  const buf = zipWith([["docProps/app.xml", "<x/>"], ["xl/worksheets/sheet1.xml", SHEET_XML]]);
+  const xml = await readZipEntry(buf, "xl/worksheets/sheet1.xml");
+  assert.ok(xml.includes("ABRP Plan"));
+  const plan = await parseAbrpXlsx(buf);
+  assert.equal(plan.stops[1].chargeSeconds, 300);
+  await assert.rejects(() => readZipEntry(buf, "nope.xml"), /not found/);
+});
+
+test("applyDwell with per-leg scales stretches each leg by its own factor", () => {
+  const places = [{ name: "A" }, { name: "S", dwellSeconds: 600 }, { name: "B" }];
+  // leg 0: drive 0..100 over two segments; leg 1: 100..300 over two segments
+  const pts = [{ t: 0, leg: 0 }, { t: 50, leg: 0 }, { t: 100, leg: 0 }, { t: 200, leg: 1 }, { t: 300, leg: 1 }];
+  applyDwell(pts, places, [2, 0.5]);
+  assert.deepEqual(pts.map((p) => p.t), [0, 100, 200, 200 + 50 + 600, 200 + 100 + 600]);
 });
 
 console.log(failed ? `\n${failed} FAILED, ${passed} passed` : `\nall ${passed} tests passed`);

@@ -37,12 +37,24 @@ export function dwellBefore(places, legIndex) {
   return s;
 }
 
-// Turn pure driving times into clock times: t = drive * scale + dwell before
-// this leg. Keeps `drive` on each point so the scale can be reapplied.
+// Turn pure driving times into clock times: t = scaled drive + dwell before
+// this leg. `scale` is one factor for the whole route or an array with one
+// factor per leg (an ABRP export gives per-leg times). Keeps `drive` on each
+// point so a different scale can be applied later. The vertex shared by two
+// legs belongs to the earlier leg, so each leg's scale covers exactly its
+// own segments.
 export function applyDwell(points, places, scale = 1) {
+  const s = (leg) => (Array.isArray(scale) ? (scale[leg] ?? 1) : scale);
+  let leg = -1, legStartDrive = 0, scaledAtLegStart = 0, lastDrive = 0;
   for (const p of points) {
     if (p.drive === undefined) p.drive = p.t;
-    p.t = p.drive * scale + dwellBefore(places, p.leg);
+    if (p.leg !== leg) {
+      if (leg >= 0) scaledAtLegStart += (lastDrive - legStartDrive) * s(leg);
+      leg = p.leg;
+      legStartDrive = lastDrive;
+    }
+    p.t = scaledAtLegStart + (p.drive - legStartDrive) * s(leg) + dwellBefore(places, leg);
+    lastDrive = p.drive;
   }
   return points;
 }

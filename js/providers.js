@@ -70,7 +70,13 @@ export function parseGoogleUrl(url) {
     throw new Error("Short Google links can't be expanded here. Open it, then paste the full /dir/ URL from the address bar.");
   }
   const i = u.pathname.indexOf("/dir/");
-  if (i < 0) throw new Error("Not a Google Maps directions URL (no /dir/ in the path).");
+  if (i < 0) {
+    // The query form, which ABRP's "open in Google Maps" emits:
+    //   /maps?saddr=lat,lng&daddr=lat,lng+to:lat,lng&dirflg=d
+    // Same shape as Apple's, so the same parser applies.
+    if (u.searchParams.get("daddr")) return parseSaddrDaddr(u);
+    throw new Error("Not a Google Maps directions URL (no /dir/ path and no daddr).");
+  }
   const segs = u.pathname.slice(i + 5).split("/");
   const places = [];
   segs.forEach((raw, idx) => {
@@ -99,15 +105,19 @@ export function parseGoogleDeparture(url) {
 
 // ---------------------------------------------------------------- Apple Maps link
 
-// saddr is optional (Apple omits it for "current location"); daddr may chain
-// stops with " to:" (Apple's multi-stop form). Returns [origin|null, ..., dest].
-export function parseAppleUrl(url) {
-  const u = new URL(url);
+// saddr is optional (omitted for "current location"); daddr may chain stops
+// with " to:" (both Apple and Google accept this form; URLSearchParams turns
+// the "+" into a space). Returns [origin|null, ..., dest].
+function parseSaddrDaddr(u) {
   const s = u.searchParams.get("saddr");
   const d = u.searchParams.get("daddr");
-  if (!d) throw new Error("Apple Maps link needs a daddr (destination).");
+  if (!d) throw new Error("The link needs a daddr (destination).");
   const stops = d.split(/\s+to:\s*/i).map((t) => t.trim()).filter(Boolean).map(placeFromText);
   return [s && s.trim() ? placeFromText(s.trim()) : null, ...stops];
+}
+
+export function parseAppleUrl(url) {
+  return parseSaddrDaddr(new URL(url));
 }
 
 export function looksLikeGoogle(url) { return /google\.[a-z.]+\/maps|goo\.gl/.test(url); }

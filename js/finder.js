@@ -195,8 +195,11 @@ export async function findCandidates(route, filters, deps) {
     .slice(0, maxDetourBuildings)
     .map((cands) => ({ cands, building: cands[0].building, milesAlongRoute: cands[0].milesAlongRoute, vertexIndex: cands[0].vertexIndex, legIndex: cands[0].legIndex }))
     .sort((a, b) => a.milesAlongRoute - b.milesAlongRoute);
-  // route.timeScale > 1 when the user supplied a traffic-aware drive time from
-  // Google or Apple; leg times come back unscaled and get the same factor.
+  // route.timeScale != 1 when the user supplied a traffic-aware drive time;
+  // route.legScales holds one factor per leg when an ABRP export supplied
+  // per-leg times. Leg times come back unscaled and get the factor of the leg
+  // the building sits on.
+  const scaleFor = (legIndex) => (route.legScales ? (route.legScales[legIndex] ?? 1) : route.timeScale || 1);
   const scale = route.timeScale || 1;
   const pts = route.points;
   let done = 0;
@@ -205,10 +208,11 @@ export async function findCandidates(route, filters, deps) {
   // detourSec and toBuildingSec are unscaled driving seconds; extraSec is
   // clock time that is not driving (dwell at earlier stops) and is not scaled.
   const applyResult = (job, detourSec, toBuildingSec, exitIndex, extraSec = 0) => {
+    const k = scaleFor(job.legIndex);
     for (const c of job.cands) {
       c.routed = true;
-      c.detourMinutes = Math.max(0, (detourSec * scale) / 60);
-      c.arrivalAtBuilding = new Date(route.departure.getTime() + (pts[exitIndex].t + toBuildingSec * scale + extraSec) * 1000);
+      c.detourMinutes = Math.max(0, (detourSec * k) / 60);
+      c.arrivalAtBuilding = new Date(route.departure.getTime() + (pts[exitIndex].t + toBuildingSec * k + extraSec) * 1000);
       if (c.startInstant) c.deltaMinutes = (c.arrivalAtBuilding - c.startInstant) / 60000;
     }
   };
@@ -241,7 +245,7 @@ export async function findCandidates(route, filters, deps) {
           const a = toB[col.get(i)][bi];
           const c = fromB[bi][col.get(j)];
           if (a == null || c == null) continue;
-          const onRoute = (pts[j].t - pts[i].t) / scale;
+          const onRoute = (pts[j].t - pts[i].t) / scaleFor(job.legIndex);
           const det = a + c - onRoute;
           if (!best || det < best.det) best = { det, a, i };
         }

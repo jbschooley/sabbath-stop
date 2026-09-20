@@ -3,6 +3,7 @@
 
 import { DEFAULT_FILTERS, findCandidates, reapply } from "./finder.js";
 import { debounce, reverse, suggest } from "./geocode.js";
+import { isUnresolvableName, looksLikeXlsx, parseAbrpXlsx } from "./abrp.js";
 import { defaultDwellMinutes, fromPlaces, fromTrackFile, parseLink } from "./providers.js";
 import { applyDwell, matrix, routePlaces } from "./routing.js";
 import { defaultDepartureLocal, fmtDateTime, fmtHHMM, toDatetimeLocal, tzAbbrev } from "./tz.js";
@@ -20,6 +21,7 @@ const state = {
   candidates: [],
   selectedId: null,
   places: { origin: null, destination: null, waypoints: [], dwellMin: [] },
+  planLegSeconds: null,  // per-leg drive times from an ABRP export, if any
   manifest: null,
   subtypes: [],
   tileCache: new Map(),
@@ -66,6 +68,8 @@ function saveRouteInput() {
       link: $("link").value,
       trafficH: $("traffic-h").value,
       trafficM: $("traffic-m").value,
+      trafficIncludesStops: $("traffic-includes-stops").checked,
+      planLegSeconds: state.planLegSeconds,
     };
     localStorage.setItem(ROUTE_INPUT_KEY, JSON.stringify(snap));
   } catch { /* ignore */ }
@@ -82,6 +86,8 @@ function restoreRouteInput() {
   $("link").value = snap.link || "";
   $("traffic-h").value = snap.trafficH || "";
   $("traffic-m").value = snap.trafficM || "";
+  $("traffic-includes-stops").checked = !!snap.trafficIncludesStops;
+  state.planLegSeconds = Array.isArray(snap.planLegSeconds) ? snap.planLegSeconds : null;
   if (snap.mode && snap.mode !== "ab") {
     const btn = document.querySelector(`[role="tab"][data-tab="${snap.mode}"]`);
     if (btn) btn.click();
@@ -245,7 +251,7 @@ function addWaypointRow(prefill, text, dwellMin) {
   if (dwellMin) dwell.value = dwellMin;
   attachSuggest(input, list, (p) => { state.places.waypoints[idx] = p; });
   dwell.addEventListener("change", () => { state.places.dwellMin[idx] = Math.max(0, parseFloat(dwell.value) || 0); saveRouteInput(); });
-  row.querySelector("button").addEventListener("click", () => { state.places.waypoints[idx] = undefined; row.remove(); saveRouteInput(); });
+  row.querySelector("button").addEventListener("click", () => { state.places.waypoints[idx] = undefined; state.planLegSeconds = null; row.remove(); saveRouteInput(); });
   wrap.appendChild(row);
 }
 
@@ -290,7 +296,13 @@ function importLink() {
   if (!url) throw new Error("Paste a directions link.");
   const { places, departure } = parseLink(url);
 
-  // Reset the A -> B form.
+  state.planLegSeconds = null;
+  return fillForm(places, places.slice(1, -1).map((p) => defaultDwellMinutes(p) || ""), departure, "link");
+}
+
+// Put a list of places into the A -> B form. places[0] / last may be null
+// (unknown start / end). dwellMins lines up with the intermediate stops.
+function fillForm(places, dwellMins, departure, sourceWord) {
   $("waypoints").innerHTML = "";
   state.places = { origin: null, destination: null, waypoints: [], dwellMin: [] };
 
@@ -300,10 +312,10 @@ function importLink() {
   };
   setField("origin", "origin", places[0]);
   setField("destination", "destination", places[places.length - 1]);
-  for (const p of places.slice(1, -1)) {
+  places.slice(1, -1).forEach((p, i) => {
     const pick = typeof p.lng === "number" ? p : null;
-    addWaypointRow(pick, pick ? undefined : p.query || p.name, defaultDwellMinutes(p) || "");
-  }
+    addWaypointRow(pick, pick ? undefined : p.query || p.name, dwellMins[i] || "");
+  });
   if (departure) {
     $("departure").value = toDatetimeLocal(departure);
     saveDeparture($("departure").value);
@@ -312,10 +324,35 @@ function importLink() {
   saveRouteInput();
 
   const notes = [];
-  if (departure) notes.push("departure taken from the link");
-  if (!places[0]) { notes.push("no start in the link, using your location"); useMyLocation(); }
+  if (departure) notes.push(`departure taken from the ${sourceWord}`);
+  if (!places[0]) { notes.push(`no usable start in the ${sourceWord}, using your location`); useMyLocation(); }
+  if (!places[places.length - 1]) notes.push(`the ${sourceWord} doesn't say where the trip ends; type the destination`);
   setStatus(`Imported ${places.length} places${notes.length ? ` (${notes.join("; ")})` : ""}.`);
   return !places[0]; // true when the origin is still being resolved
+}
+
+// ABRP "Export to Excel": names, charge times and per-leg drive times, but no
+// coordinates. Stops go in as text for Photon to resolve; charge time becomes
+// dwell; the per-leg times replace the router's once the route is built.
+async function importAbrp(file) {
+  const buf = await file.arrayBuffer();
+  const plan = await parseAbrpXlsx(buf);
+  const places = plan.stops.map((s) => (isUnresolvableName(s.rawName) ? null : { query: s.name, name: s.name }));
+  const dwellMins = plan.stops.slice(1, -1).map((s) => (s.chargeSeconds ? Math.round(s.chargeSeconds / 60) : ""));
+  // ABRP gives a clock time for departure but no date: use the date already
+  // in the picker.
+  let departure = null;
+  const dep = plan.stops[0].departureMin;
+  if (dep !== null) {
+    const d = new Date($("departure").value || Date.now());
+    d.setHours(Math.floor(dep / 60), dep % 60, 0, 0);
+    departure = d;
+  }
+  const waiting = fillForm(places, dwellMins, departure, "ABRP export");
+  state.planLegSeconds = plan.stops.slice(0, -1).map((s) => s.driveSecondsToNext);
+  if (state.planLegSeconds.some((s) => s === null)) state.planLegSeconds = null;
+  saveRouteInput();
+  return waiting;
 }
 
 function selectTab(name) {
@@ -333,7 +370,12 @@ async function buildRoute() {
   }
   if (mode === "file") {
     const f = $("file").files[0];
-    if (!f) throw new Error("Choose a GPX or KML file.");
+    if (!f) throw new Error("Choose an ABRP export, GPX, or KML file.");
+    if (looksLikeXlsx(f.name, await f.slice(0, 4).arrayBuffer())) {
+      const waiting = await importAbrp(f);
+      if (waiting) throw new Error("Getting your location for the start. Press Find wards again once it shows in the From field.");
+      return buildRoute();
+    }
     return fromTrackFile(await f.text(), f.name, departure);
   }
   const o = state.places.origin || ($("origin").value.trim() ? { query: $("origin").value.trim() } : null);
@@ -354,19 +396,43 @@ function readTrafficSeconds() {
   return s > 0 ? s : null;
 }
 
-// The free router has no traffic. If the user tells us what Google or Apple
-// predicts for this departure, scale every driving time to match. Dwell at
-// stops is clock time, not driving, and is left alone. Detour legs get the
-// same factor inside the finder.
+// The free router has no traffic. Two ways to correct it, in priority order:
+//  1. An ABRP export supplied a drive time per leg: scale each leg to match.
+//  2. The user typed the time their navigation app predicts: scale the whole
+//     route. If that time includes stops (Tesla, ABRP), the dwell is taken
+//     out first; Google's times are driving only.
+// Dwell at stops is clock time, not driving, and is never scaled. Detour legs
+// get the factor of the leg they sit on inside the finder.
 function applyTrafficTime(route) {
-  const wanted = readTrafficSeconds();
-  if (!wanted || !route.driveSeconds || route.provider === "file") { route.timeScale = 1; return; }
+  route.timeScale = 1; route.legScales = null;
+  if (!route.driveSeconds || route.provider === "file") return;
+
+  const plan = state.planLegSeconds;
+  if (plan && plan.length === route.legSeconds.length && route.legSeconds.every((s) => s > 0)) {
+    const scales = plan.map((s, i) => s / route.legSeconds[i]);
+    if (scales.every((k) => k >= 0.4 && k <= 3)) {
+      const planDrive = plan.reduce((a, s) => a + s, 0);
+      route.legScales = scales;
+      route.timeScale = planDrive / route.driveSeconds;
+      route.totalSeconds = planDrive + (route.dwellSeconds || 0);
+      applyDwell(route.points, route.places, scales);
+      route.legSeconds = plan.slice();
+      route.timingNote = "leg times from ABRP";
+      return;
+    }
+  }
+
+  let wanted = readTrafficSeconds();
+  if (!wanted) return;
+  if ($("traffic-includes-stops").checked) wanted -= route.dwellSeconds || 0;
+  if (wanted <= 0) { setStatus("That time is shorter than the stops alone; ignoring it.", true); return; }
   const scale = wanted / route.driveSeconds;
-  if (scale < 0.5 || scale > 3) { setStatus("That drive time is far from the routed one; ignoring it.", true); route.timeScale = 1; return; }
+  if (scale < 0.5 || scale > 3) { setStatus("That drive time is far from the routed one; ignoring it.", true); return; }
   route.timeScale = scale;
   route.totalSeconds = wanted + (route.dwellSeconds || 0);
   applyDwell(route.points, route.places, scale);
   route.legSeconds = route.legSeconds.map((s) => s * scale);
+  route.timingNote = `scaled ×${scale.toFixed(2)} to your Maps time`;
 }
 
 // ---------------------------------------------------------------- search
@@ -387,7 +453,7 @@ async function go() {
     applyTrafficTime(route);
     state.route = route;
     drawRoute(route);
-    const scaled = route.timeScale && route.timeScale !== 1 ? ` (scaled ×${route.timeScale.toFixed(2)} to your Maps time)` : "";
+    const scaled = route.timingNote ? ` (${route.timingNote})` : "";
     const dwell = route.dwellSeconds ? ` plus ${fmtDuration(route.dwellSeconds)} at stops` : "";
     setStatus(`Route: ${route.totalMiles.toFixed(0)} mi, ${fmtDuration(route.totalSeconds - (route.dwellSeconds || 0))} driving${dwell} via ${route.provider}${scaled}. Finding wards…`);
     const candidates = await findCandidates(route, state.filters, {
@@ -644,6 +710,17 @@ function boot() {
   $("import-link").addEventListener("click", tryImport);
   $("traffic-h").addEventListener("change", saveRouteInput);
   $("traffic-m").addEventListener("change", saveRouteInput);
+  $("traffic-includes-stops").addEventListener("change", saveRouteInput);
+  // Choosing an ABRP file imports it straight away, like pasting a link.
+  $("file").addEventListener("change", async () => {
+    const f = $("file").files[0];
+    if (!f) return;
+    try {
+      if (looksLikeXlsx(f.name, await f.slice(0, 4).arrayBuffer())) await importAbrp(f);
+    } catch (e) { setStatus(e.message, true); }
+  });
+  // Editing stops by hand invalidates per-leg times from an export.
+  $("add-waypoint").addEventListener("click", () => { state.planLegSeconds = null; });
   restoreRouteInput();
   $("go").addEventListener("click", go);
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "text") go(); });
