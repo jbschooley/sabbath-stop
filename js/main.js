@@ -364,19 +364,23 @@ async function buildRoute() {
   const departure = readDeparture();
   const mode = state.routeMode;
   if (mode === "link") {
-    const waitingForLocation = importLink();
+    let waitingForLocation;
+    try { waitingForLocation = importLink(); showFieldError("link-error", ""); }
+    catch (e) { showFieldError("link-error", e.message); throw e; }
     if (waitingForLocation) throw new Error("Getting your location for the start. Press Find wards again once it shows in the From field.");
     return buildRoute();
   }
   if (mode === "file") {
     const f = $("file").files[0];
     if (!f) throw new Error("Choose an ABRP export, GPX, or KML file.");
-    if (looksLikeXlsx(f.name, await f.slice(0, 4).arrayBuffer())) {
-      const waiting = await importAbrp(f);
-      if (waiting) throw new Error("Getting your location for the start. Press Find wards again once it shows in the From field.");
-      return buildRoute();
-    }
-    return fromTrackFile(await f.text(), f.name, departure);
+    try {
+      if (looksLikeXlsx(f.name, await f.slice(0, 4).arrayBuffer())) {
+        const waiting = await importAbrp(f);
+        if (waiting) throw new Error("Getting your location for the start. Press Find wards again once it shows in the From field.");
+        return buildRoute();
+      }
+      return await fromTrackFile(await f.text(), f.name, departure);
+    } catch (e) { showFieldError("file-error", e.message); throw e; }
   }
   const o = state.places.origin || ($("origin").value.trim() ? { query: $("origin").value.trim() } : null);
   const d = state.places.destination || ($("destination").value.trim() ? { query: $("destination").value.trim() } : null);
@@ -679,6 +683,13 @@ function setStatus(msg, isErr = false) {
   el.textContent = msg;
   el.classList.toggle("err", isErr);
 }
+// Inline error under a specific field; empty message hides it.
+function showFieldError(id, msg) {
+  const el = $(id);
+  el.textContent = msg;
+  el.hidden = !msg;
+  if (msg) setStatus(msg, true);
+}
 function fmtDuration(sec) {
   const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
   return h ? `${h} h ${m} min` : `${m} min`;
@@ -701,9 +712,11 @@ function boot() {
   $("use-location").addEventListener("click", useMyLocation);
   $("link").addEventListener("input", saveRouteInput);
   // Import as soon as a link lands in the field, whether pasted or typed.
+  // Errors show right under the field, where a phone user is looking.
   const tryImport = () => {
-    if (!$("link").value.trim()) return;
-    try { importLink(); } catch (e) { setStatus(e.message, true); }
+    if (!$("link").value.trim()) { showFieldError("link-error", ""); return; }
+    try { importLink(); showFieldError("link-error", ""); }
+    catch (e) { showFieldError("link-error", e.message); }
   };
   $("link").addEventListener("paste", () => setTimeout(tryImport, 0));
   $("link").addEventListener("change", tryImport);
@@ -714,10 +727,11 @@ function boot() {
   // Choosing an ABRP file imports it straight away, like pasting a link.
   $("file").addEventListener("change", async () => {
     const f = $("file").files[0];
+    showFieldError("file-error", "");
     if (!f) return;
     try {
       if (looksLikeXlsx(f.name, await f.slice(0, 4).arrayBuffer())) await importAbrp(f);
-    } catch (e) { setStatus(e.message, true); }
+    } catch (e) { showFieldError("file-error", e.message); }
   });
   // Editing stops by hand invalidates per-leg times from an export.
   $("add-waypoint").addEventListener("click", () => { state.planLegSeconds = null; });

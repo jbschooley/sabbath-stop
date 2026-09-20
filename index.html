@@ -64,6 +64,7 @@
           <input id="link" type="url" placeholder="https://www.google.com/maps/dir/…  or  https://maps.apple.com/?daddr=…">
           <button class="btn" id="import-link" type="button">Import</button>
         </div>
+        <p class="hint err" id="link-error" role="alert" hidden></p>
         <p class="hint">The link's places are copied into the A → B tab, where you can adjust stops and dwell times. Tesla Superchargers get 15 minutes by default. A link with no start uses your location. Short <code>maps.app.goo.gl</code> links can't be expanded here: open the link, then paste the full URL from the address bar.</p>
       </div>
     </div>
@@ -72,6 +73,7 @@
       <div class="field">
         <label for="file">ABRP Excel export, GPX, or KML</label>
         <input id="file" type="file" accept=".xlsx,.gpx,.kml,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/gpx+xml,application/vnd.google-earth.kml+xml">
+        <p class="hint err" id="file-error" role="alert" hidden></p>
         <p class="hint">An ABRP "Export to Excel" file is copied into the A → B tab: each stop by name, charging time as dwell, and ABRP's own per-leg drive times. It has no coordinates, so check each stop's suggestion. GPX tracks with timestamps are used as-is; tracks without, and KML, are re-routed through their shape.</p>
       </div>
     </div>
