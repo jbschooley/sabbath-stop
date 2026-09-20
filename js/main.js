@@ -754,10 +754,15 @@ function wireInfoHints() {
       hint.hidden = !hint.hidden;
       btn.setAttribute("aria-expanded", String(!hint.hidden));
     });
+    // The button sits at the right of the field's label; a field with no label
+    // (the departure picker) uses the section heading above it.
     const field = hint.closest(".field");
     const label = field && field.querySelector("label");
+    const heading = field && !label && field.previousElementSibling && field.previousElementSibling.tagName === "H2"
+      ? field.previousElementSibling : null;
     const prev = hint.previousElementSibling;
     if (label) label.appendChild(btn);
+    else if (heading) heading.appendChild(btn);
     else if (prev && prev.tagName === "BUTTON") prev.after(btn);
     else hint.parentNode.insertBefore(btn, hint);
   }
