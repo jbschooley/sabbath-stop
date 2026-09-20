@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sabbath Stop</title>
+  <meta name="description" content="Find a ward to attend along your driving route, filtered by unit type, detour cost, and arrival time relative to sacrament meeting.">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <h1>Sabbath Stop</h1>
+    <p class="tagline">Find a ward along your drive, timed to sacrament meeting.</p>
+
+    <h2>When are you leaving?</h2>
+    <div class="field">
+      <input id="departure" type="datetime-local" aria-label="Departure date and time">
+      <p class="hint">Every arrival time depends on this. Defaults to next Sunday, 8:00 AM your time.</p>
+    </div>
+    <div class="field">
+      <label for="traffic-time">Drive time from Google or Apple Maps (optional)</label>
+      <input id="traffic-time" type="text" placeholder="e.g. 5h 20m" inputmode="numeric">
+      <p class="hint">The free router has no traffic data. If Maps predicts a different total for this departure, enter it and every arrival and detour is scaled to match.</p>
+    </div>
+
+    <h2>Route</h2>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="ab">A → B</button>
+      <button role="tab" aria-selected="false" data-tab="link">Paste link</button>
+      <button role="tab" aria-selected="false" data-tab="file">GPX / KML</button>
+    </div>
+
+    <div class="tab active" id="tab-ab">
+      <div class="field suggest">
+        <label for="origin">From</label>
+        <div class="row tight">
+          <input id="origin" type="text" placeholder="City, address, or place" autocomplete="off">
+          <button class="btn icon" id="use-location" title="Use my location" aria-label="Use my location">◎</button>
+        </div>
+        <ul id="origin-suggest" hidden></ul>
+      </div>
+      <div class="waypoints" id="waypoints"></div>
+      <div class="field suggest">
+        <label for="destination">To</label>
+        <input id="destination" type="text" placeholder="City, address, or place" autocomplete="off">
+        <ul id="destination-suggest" hidden></ul>
+      </div>
+      <button class="btn small" id="add-waypoint">+ Add a stop</button>
+    </div>
+
+    <div class="tab" id="tab-link">
+      <div class="field">
+        <label for="link">Google Maps or Apple Maps directions link</label>
+        <input id="link" type="url" placeholder="https://www.google.com/maps/dir/…  or  https://maps.apple.com/?saddr=…&daddr=…">
+        <p class="hint">Short <code>maps.app.goo.gl</code> links can't be expanded here. Open the link, then paste the full URL from the address bar.</p>
+      </div>
+    </div>
+
+    <div class="tab" id="tab-file">
+      <div class="field">
+        <label for="file">GPX or KML file</label>
+        <input id="file" type="file" accept=".gpx,.kml,application/gpx+xml,application/vnd.google-earth.kml+xml">
+        <p class="hint">ABRP exports GPX; Google My Maps exports KML. Tracks with timestamps are used as-is; tracks without are re-routed through their shape.</p>
+      </div>
+    </div>
+
+    <h2>Which units?</h2>
+    <div class="chips" id="subtypes"></div>
+    <details class="more"><summary>More unit types</summary><div class="chips" id="subtypes-more"></div></details>
+    <p class="hint" id="subtype-hint">Pick at least one unit type.</p>
+
+    <h2>Filters</h2>
+    <div class="filters">
+      <div class="row">
+        <div class="field"><label for="max-detour">Max detour (min)</label><input id="max-detour" type="number" min="1" max="120" step="1"></div>
+        <div class="field"><label for="sort">Sort by</label>
+          <select id="sort">
+            <option value="best">Best fit</option>
+            <option value="arrival">Arrival before start</option>
+            <option value="distance">Distance along route</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" id="window-row">
+        <div class="field"><label for="window-min">Arrive from (min vs start)</label><input id="window-min" type="number" min="-180" max="60" step="1"></div>
+        <div class="field"><label for="window-max">to</label><input id="window-max" type="number" min="-180" max="60" step="1"></div>
+      </div>
+      <label class="toggle"><input id="wide" type="checkbox"> Wide mode: anything starting within
+        <input id="wide-hours" type="number" min="0.5" max="6" step="0.5" style="width:60px"> h of arrival (EV / long stops)</label>
+      <label class="toggle"><input id="hide-restricted" type="checkbox"> Hide restricted-access units (correctional facilities)</label>
+    </div>
+
+    <button class="btn primary" id="go">Find wards</button>
+    <div class="status" id="status" aria-live="polite"></div>
+
+    <h2>Results</h2>
+    <div class="summary" id="summary"></div>
+    <div class="legend"><span><i class="dot on"></i>fits your filters</span><span><i class="dot off"></i>near miss (time or detour)</span></div>
+    <ul class="results" id="results"></ul>
+
+    <footer>
+      <p>Meeting times come from the Church's <a href="https://maps.churchofjesuschrist.org/" target="_blank" rel="noopener">Meetinghouse Locator</a> and are maintained by local stakes. They drift. Every result links to its official page. Check it before you rely on a time.</p>
+      <p id="dataset-note"></p>
+      <p>Routing by <a href="https://valhalla.openstreetmap.de/" target="_blank" rel="noopener">Valhalla (FOSSGIS)</a>, geocoding by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.</p>
+    </footer>
+  </aside>
+  <main class="map"><div id="map" role="application" aria-label="Map of route and candidate wards"></div></main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
