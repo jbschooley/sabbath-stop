@@ -850,6 +850,7 @@ function wireInfoHints() {
     if (label) label.appendChild(btn);
     else if (heading) heading.appendChild(btn);
     else if (prev && prev.tagName === "BUTTON") prev.after(btn);
+    else if (prev && prev.classList.contains("row")) prev.appendChild(btn); // a row of buttons
     else hint.parentNode.insertBefore(btn, hint);
   }
 }
