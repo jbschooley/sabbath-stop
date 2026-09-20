@@ -119,10 +119,16 @@ test("applyDwell shifts later legs and keeps drive so a scale can be reapplied",
   applyDwell(pts, places, 2);
   assert.deepEqual(pts.map((p) => p.t), [0, 200, 1400, 1800], "dwell is not scaled, driving is");
 });
-test("default departure is now, rounded up to five minutes", () => {
+test("default departure: on a Sunday it is now, rounded up to five minutes", () => {
+  // 2026-09-20 is a Sunday.
   assert.equal(defaultDepartureLocal(new Date(2026, 8, 20, 15, 3, 40)), "2026-09-20T15:05");
   assert.equal(defaultDepartureLocal(new Date(2026, 8, 20, 15, 0, 0)), "2026-09-20T15:00");
   assert.equal(defaultDepartureLocal(new Date(2026, 8, 20, 23, 58, 0)), "2026-09-21T00:00");
+});
+test("default departure: on any other day it is 8:00 AM next Sunday", () => {
+  assert.equal(defaultDepartureLocal(new Date(2026, 8, 21, 9, 0)), "2026-09-27T08:00");  // Monday
+  assert.equal(defaultDepartureLocal(new Date(2026, 8, 26, 23, 30)), "2026-09-27T08:00"); // Saturday night
+  assert.equal(defaultDepartureLocal(new Date(2026, 8, 23, 0, 0)), "2026-09-27T08:00");  // Wednesday
 });
 
 console.log("finder");

@@ -8,7 +8,24 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/app.css?v=2026092002">
+  <!-- Cache busting without a build step. GitHub Pages serves everything with
+       max-age=600, so a phone that opened the app minutes before a deploy keeps
+       running the old scripts. Bump the version on every deploy; the import
+       map applies it to the modules that main.js imports by relative path. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "./js/abrp.js":      "./js/abrp.js?v=2026092002",
+      "./js/finder.js":    "./js/finder.js?v=2026092002",
+      "./js/geo.js":       "./js/geo.js?v=2026092002",
+      "./js/geocode.js":   "./js/geocode.js?v=2026092002",
+      "./js/providers.js": "./js/providers.js?v=2026092002",
+      "./js/routing.js":   "./js/routing.js?v=2026092002",
+      "./js/tz.js":        "./js/tz.js?v=2026092002"
+    }
+  }
+  </script>
 </head>
 <body>
 <div class="app">
@@ -19,7 +36,7 @@
     <h2>When are you leaving?</h2>
     <div class="field">
       <input id="departure" type="datetime-local" aria-label="Departure date and time">
-      <p class="hint">Every arrival time depends on this. Defaults to right now and remembers a future time you set. A Google Maps link with "depart at" fills it in; Apple Maps links carry no time.</p>
+      <p class="hint">Every arrival time depends on this. Defaults to right now on a Sunday, otherwise 8:00 AM next Sunday, and remembers a future time you set. A Google Maps link with "depart at" or an ABRP export fills it in; Apple Maps links carry no time.</p>
     </div>
     <div class="field">
       <label for="traffic-h">Drive time from Google or Apple Maps (optional)</label>
@@ -124,6 +141,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js?v=2026092002"></script>
 </body>
 </html>
