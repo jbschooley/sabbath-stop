@@ -430,6 +430,7 @@ test("parseAbrpRows extracts stops, charge time, per-leg drive time and clock ti
   assert.equal(plan.stops[2].arrivalMin, 17 * 60 + 26);
   assert.equal(plan.totalDriveSeconds, 4020);
   assert.equal(plan.totalSeconds, 4560);
+  assert.equal(plan.totalMiles, 58);
 });
 
 // Minimal zip writer for the test: one deflated entry, CRC left zero because

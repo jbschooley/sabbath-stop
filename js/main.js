@@ -5,8 +5,8 @@ import { DEFAULT_FILTERS, findCandidates, reapply } from "./finder.js";
 import { debounce, reverse, suggest } from "./geocode.js";
 import { isUnresolvableName, looksLikeXlsx, parseAbrpXlsx } from "./abrp.js";
 import { defaultDwellMinutes, fromPlaces, fromTrackFile, looksLikeAbrpFile, parseLink } from "./providers.js";
-import { applyDwell, matrix, routePlaces } from "./routing.js";
-import { defaultDepartureLocal, fmtDateTime, fmtHHMM, toDatetimeLocal, tzAbbrev } from "./tz.js";
+import { applyDwell, dwellBefore, matrix, routePlaces } from "./routing.js";
+import { defaultDepartureLocal, fmtDateTime, fmtHHMM, fmtTime, toDatetimeLocal, tzAbbrev } from "./tz.js";
 
 const $ = (id) => document.getElementById(id);
 const FILTERS_KEY = "ss:filters:v2"; // bumped when defaults change so they take effect
@@ -363,7 +363,70 @@ async function importAbrp(fileOrBuffer) {
   state.planLegSeconds = plan.stops.slice(0, -1).map((s) => s.driveSecondsToNext);
   if (state.planLegSeconds.some((s) => s === null)) state.planLegSeconds = null;
   saveRouteInput();
+  renderPlanSummary(plan);
   return waiting;
+}
+
+// Straight from the sheet, shown the moment an ABRP plan is imported, before
+// anything is routed. Replaced by the routed summary after Find wards.
+function renderPlanSummary(plan) {
+  const dwell = plan.stops.reduce((a, s) => a + (s.dwellSeconds || 0), 0);
+  const drive = plan.totalDriveSeconds ?? plan.stops.reduce((a, s) => a + (s.driveSecondsToNext || 0), 0);
+  const total = plan.totalSeconds ?? drive + dwell;
+  const parts = ["ABRP plan"];
+  if (plan.totalMiles) parts.push(`${plan.totalMiles.toFixed(0)} mi`);
+  parts.push(`${fmtDuration(drive)} driving`);
+  if (dwell) parts.push(`${fmtDuration(dwell)} at stops`, `${fmtDuration(total)} total`);
+  const first = plan.stops[0], last = plan.stops[plan.stops.length - 1];
+  if (first.departureMin !== null && last.arrivalMin !== null) parts.push(`${fmtClock(first.departureMin)} → ${fmtClock(last.arrivalMin)} (ABRP's times)`);
+  const el = $("route-summary");
+  el.textContent = parts.join(" · ");
+  el.hidden = false;
+  renderItinerary(plan.stops.map((s) => ({
+    name: s.name,
+    arrive: s.arrivalMin === null ? null : fmtClock(s.arrivalMin),
+    depart: s.departureMin === null ? null : fmtClock(s.departureMin),
+    dwellSeconds: s.dwellSeconds,
+  })));
+}
+
+function fmtClock(minutes) {
+  const h = Math.floor(minutes / 60) % 24, m = minutes % 60;
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+
+// One line per place: name on the left, arrive / depart on the right.
+function renderItinerary(rows) {
+  const ol = $("itinerary");
+  ol.innerHTML = rows.map((r, i) => {
+    const isFirst = i === 0, isLast = i === rows.length - 1;
+    let times;
+    if (isFirst) times = r.depart ? `depart <b>${escapeHtml(r.depart)}</b>` : "";
+    else if (isLast) times = r.arrive ? `arrive <b>${escapeHtml(r.arrive)}</b>` : "";
+    else {
+      const stay = r.dwellSeconds ? ` (${Math.round(r.dwellSeconds / 60)} min)` : "";
+      times = `${r.arrive ? `<b>${escapeHtml(r.arrive)}</b>` : "?"} → ${r.depart ? `<b>${escapeHtml(r.depart)}</b>` : "?"}${stay}`;
+    }
+    return `<li><span class="place" title="${escapeAttr(r.name)}">${escapeHtml(r.name)}</span><span class="times">${times}</span></li>`;
+  }).join("");
+  ol.hidden = rows.length === 0;
+}
+
+// Itinerary from the routed times: arrival at place k is departure plus the
+// (scaled) legs before it plus the dwell at the stops already passed.
+function itineraryFromRoute(route) {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const t0 = route.departure.getTime();
+  let drive = 0;
+  return route.places.map((p, k) => {
+    if (k > 0) drive += route.legSeconds[k - 1] || 0;
+    const dwellPassed = k > 0 ? dwellBefore(route.places, k - 1) : 0;
+    const arrive = new Date(t0 + (drive + dwellPassed) * 1000);
+    const dwell = k > 0 && k < route.places.length - 1 ? p.dwellSeconds || 0 : 0;
+    const depart = new Date(arrive.getTime() + dwell * 1000);
+    return { name: p.name, arrive: fmtTime(arrive, tz), depart: fmtTime(depart, tz), dwellSeconds: dwell };
+  });
 }
 
 function selectTab(name) {
@@ -516,6 +579,7 @@ function renderRouteSummary(route) {
   if (route.timingNote) parts.push(route.timingNote);
   el.textContent = parts.join(" · ");
   el.hidden = false;
+  renderItinerary(itineraryFromRoute(route));
 }
 
 // ---------------------------------------------------------------- render
@@ -564,6 +628,7 @@ function clearResults() {
   $("results").innerHTML = "";
   $("summary").textContent = "";
   $("route-summary").hidden = true;
+  $("itinerary").hidden = true;
 }
 
 function pinIcon(on, selected) {

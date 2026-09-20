@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/app.css?v=2026092006">
+  <link rel="stylesheet" href="css/app.css?v=2026092007">
   <!-- Cache busting without a build step. GitHub Pages serves everything with
        max-age=600, so a phone that opened the app minutes before a deploy keeps
        running the old scripts. Bump the version on every deploy; the import
@@ -16,13 +16,13 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/abrp.js":      "./js/abrp.js?v=2026092006",
-      "./js/finder.js":    "./js/finder.js?v=2026092006",
-      "./js/geo.js":       "./js/geo.js?v=2026092006",
-      "./js/geocode.js":   "./js/geocode.js?v=2026092006",
-      "./js/providers.js": "./js/providers.js?v=2026092006",
-      "./js/routing.js":   "./js/routing.js?v=2026092006",
-      "./js/tz.js":        "./js/tz.js?v=2026092006"
+      "./js/abrp.js":      "./js/abrp.js?v=2026092007",
+      "./js/finder.js":    "./js/finder.js?v=2026092007",
+      "./js/geo.js":       "./js/geo.js?v=2026092007",
+      "./js/geocode.js":   "./js/geocode.js?v=2026092007",
+      "./js/providers.js": "./js/providers.js?v=2026092007",
+      "./js/routing.js":   "./js/routing.js?v=2026092007",
+      "./js/tz.js":        "./js/tz.js?v=2026092007"
     }
   }
   </script>
@@ -125,6 +125,7 @@
     <button class="btn primary" id="go">Find wards</button>
     <div class="status" id="status" aria-live="polite"></div>
     <div class="route-summary" id="route-summary" hidden></div>
+    <ol class="itinerary" id="itinerary" hidden></ol>
 
     <h2>Results</h2>
     <div class="summary" id="summary"></div>
@@ -142,6 +143,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script type="module" src="js/main.js?v=2026092006"></script>
+<script type="module" src="js/main.js?v=2026092007"></script>
 </body>
 </html>

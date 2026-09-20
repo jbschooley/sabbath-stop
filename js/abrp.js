@@ -154,12 +154,26 @@ export function parseAbrpRows(rows) {
     });
   }
   if (stops.length < 2) throw new Error("ABRP export has fewer than two stops.");
+  const cDist = need("distance");
   return {
     planUrl,
     stops,
+    totalMiles: totals && cDist ? parseMiles(totals[cDist]) : null,
     totalDriveSeconds: totals && cDrive ? parseAbrpDuration(totals[cDrive]) : null,
     totalSeconds: totals ? parseAbrpDuration(totals.A) : null,
   };
+}
+
+// "58 mi" -> 58, "0 ft" -> 0, "93 km" -> miles; null if not a distance.
+export function parseMiles(text) {
+  const m = /^([\d.,]+)\s*(mi|km|ft|m)\b/i.exec((text || "").trim());
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(/,/g, ""));
+  const u = m[2].toLowerCase();
+  if (u === "mi") return n;
+  if (u === "km") return n / 1.609344;
+  if (u === "ft") return n / 5280;
+  return n / 1609.344;
 }
 
 export async function parseAbrpXlsx(buffer) {
