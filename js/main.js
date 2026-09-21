@@ -8,7 +8,7 @@ import { bufferBbox, haversineMi, tilesForBbox } from "./geo.js";
 import { defaultDwellMinutes, fromPlaces, fromTrackFile, looksLikeAbrpFile, parseLink } from "./providers.js";
 import { applyDwell, dwellBefore, matrix, routePlaces } from "./routing.js";
 import { decodeShare, sharePayloadFrom, shareUrl } from "./share.js";
-import { defaultDepartureLocal, fmtDateTime, fmtHHMM, fmtTime, instantFromWallClock, toDatetimeLocal, tzAbbrev, wallClockValue } from "./tz.js";
+import { defaultDepartureLocal, fmtDateTime, fmtHHMM, fmtTime, instantFromWallClock, isGeneralConference, toDatetimeLocal, tzAbbrev, wallClockValue } from "./tz.js";
 
 const $ = (id) => document.getElementById(id);
 const FILTERS_KEY = "ss:filters:v2"; // bumped when defaults change so they take effect
@@ -485,8 +485,21 @@ async function resolveOrigin() {
   return { ...hit, name: text };
 }
 
+// Note under the picker when the trip falls on general conference weekend.
+// Reads the picker's own date; the route summary re-checks the arrival day.
+function updateConferenceNote(extraYmd) {
+  const el = $("conference-note");
+  const ymd = [($("departure").value || "").slice(0, 10), extraYmd].find(isGeneralConference);
+  if (!ymd) { el.hidden = true; return; }
+  const d = new Date(`${ymd}T12:00:00Z`);
+  const when = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" }).format(d);
+  el.innerHTML = `${escapeHtml(when)} is general conference. Wards and branches don't hold their regular meetings that weekend; the sessions are broadcast at 10:00 AM and 2:00 PM Mountain Time and streamed at <a href="https://www.churchofjesuschrist.org/study/general-conference" target="_blank" rel="noopener">churchofjesuschrist.org</a>. The times below are the units' usual Sunday schedules.`;
+  el.hidden = false;
+}
+
 // Note under the picker when the origin's zone differs from the device's.
 async function updateDepartureZoneNote() {
+  updateConferenceNote();
   const el = $("departure-tz");
   const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const first = stopEntries()[0];
@@ -829,6 +842,9 @@ async function renderRouteSummary(route) {
   parts.push(`arrive ${fmtDateTime(arrive, destTz)}${destTz !== localTz ? ` ${tzAbbrev(arrive, destTz)} (local there)` : ""}`);
   if (route.timingNote) parts.push(route.timingNote);
   else if (route.provider === "osrm") parts.push("timed by the OSRM fallback, which runs slow on freeways; enter your Maps time above to correct it");
+  const arriveYmd = wallClockValue(arrive, destTz).slice(0, 10);
+  if (isGeneralConference(arriveYmd)) parts.push("general conference weekend");
+  updateConferenceNote(arriveYmd);
   el.textContent = parts.join(" · ");
   el.hidden = false;
   renderItinerary(itineraryFromRoute(route, zones, localTz));
@@ -1150,10 +1166,11 @@ function escapeAttr(s) { return escapeHtml(s); }
 
 async function boot() {
   $("departure").value = initialDepartureLocal();
-  $("departure").addEventListener("change", () => saveDeparture($("departure").value));
+  $("departure").addEventListener("change", () => { saveDeparture($("departure").value); updateConferenceNote(); });
   $("reset-departure").addEventListener("click", () => {
     try { localStorage.removeItem(DEPART_KEY); } catch { /* ignore */ }
     $("departure").value = defaultDepartureLocal();
+    updateConferenceNote();
     setStatus("Departure reset to the default.");
   });
   $("clear-route").addEventListener("click", clearRouteInputs);

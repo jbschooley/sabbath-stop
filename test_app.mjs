@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexBuckets } from "./js/geo.js";
-import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal, weekdayIn, wallClockValue, instantFromWallClock, tzAbbrev } from "./js/tz.js";
+import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal, weekdayIn, wallClockValue, instantFromWallClock, tzAbbrev, generalConferenceDays, isGeneralConference } from "./js/tz.js";
 import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS } from "./js/finder.js";
 import { dwellBefore, applyDwell } from "./js/routing.js";
 import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
@@ -391,6 +391,17 @@ test("Google URL with coordinates yields lat/lng places", () => {
 });
 test("short Google links are refused with a helpful message", () => {
   assert.throws(() => parseGoogleUrl("https://maps.app.goo.gl/abc123"), /paste the full/);
+});
+
+test("general conference is the first Sunday of April and October plus the Saturday before", () => {
+  assert.deepEqual(generalConferenceDays(2026), ["2026-04-04", "2026-04-05", "2026-10-03", "2026-10-04"]);
+  assert.deepEqual(generalConferenceDays(2023), ["2023-04-01", "2023-04-02", "2023-09-30", "2023-10-01"]); // October 1 was a Sunday
+  assert.deepEqual(generalConferenceDays(2027), ["2027-04-03", "2027-04-04", "2027-10-02", "2027-10-03"]);
+  assert.equal(isGeneralConference("2026-10-04"), true);
+  assert.equal(isGeneralConference("2026-10-03"), true);
+  assert.equal(isGeneralConference("2026-10-11"), false);
+  assert.equal(isGeneralConference("2026-09-27"), false);
+  assert.equal(isGeneralConference(""), false);
 });
 
 test("geocoder label carries the street line so two branches in one city differ", () => {

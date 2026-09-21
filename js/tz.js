@@ -126,3 +126,21 @@ export function toDatetimeLocal(d) {
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+// General conference is the first Sunday of April and October and the
+// Saturday before it. Wards and branches hold no regular meetings that
+// weekend; the sessions are broadcast instead. Dates as "YYYY-MM-DD".
+export function generalConferenceDays(year) {
+  const out = [];
+  for (const month of [3, 9]) {
+    const first = new Date(Date.UTC(year, month, 1));
+    const sunday = new Date(Date.UTC(year, month, 1 + ((7 - first.getUTCDay()) % 7)));
+    const saturday = new Date(sunday.getTime() - 86400000);
+    out.push(saturday.toISOString().slice(0, 10), sunday.toISOString().slice(0, 10));
+  }
+  return out;
+}
+export function isGeneralConference(ymd) {
+  const year = typeof ymd === "string" ? parseInt(ymd.slice(0, 4), 10) : NaN;
+  return Number.isFinite(year) && generalConferenceDays(year).includes(ymd);
+}
