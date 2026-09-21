@@ -106,8 +106,15 @@ export function isUnresolvableName(name) {
 }
 
 // "Tesla Supercharger [Saini Charge] Sandy, UT [Tesla]" -> "Tesla Supercharger Sandy, UT"
+// "Tesla Supercharger Beaver, UT - 525 W [Tesla]" -> "Tesla Supercharger Beaver, UT".
+// The bracketed network tag and the " - street" fragment after the state
+// both send the geocoder to the wrong charger: with "525 W" left in, Photon
+// matched a different Supercharger 90 miles away.
 export function cleanStopName(name) {
-  return (name || "").replace(/\[[^\]]*\]/g, " ").replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
+  return (name || "")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/(,\s*[A-Z]{2})\s+-\s+.*$/, "$1")
+    .replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
 }
 
 /**

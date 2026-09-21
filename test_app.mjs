@@ -579,6 +579,11 @@ test("parseAbrpDuration and parseClock read ABRP's text formats", () => {
 });
 test("cleanStopName strips bracketed tags; isUnresolvableName spots placeholders", () => {
   assert.equal(cleanStopName("Tesla Supercharger [Saini Charge] Sandy, UT [Tesla]"), "Tesla Supercharger Sandy, UT");
+  // The street fragment after the state sent Photon to a different charger 90 miles away.
+  assert.equal(cleanStopName("Tesla Supercharger Beaver, UT - 525 W [Tesla]"), "Tesla Supercharger Beaver, UT");
+  assert.equal(cleanStopName("Tesla Supercharger Yermo, CA - Sunrise Canyon Rd [Tesla]"), "Tesla Supercharger Yermo, CA");
+  assert.equal(cleanStopName("Tesla Supercharger Moapa, NV [Tesla]"), "Tesla Supercharger Moapa, NV");
+  assert.equal(cleanStopName("1924 Colina Salida del Sol, San Clemente, CA"), "1924 Colina Salida del Sol, San Clemente, CA");
   assert.ok(isUnresolvableName("Home") && isUnresolvableName("Point on map") && !isUnresolvableName("Provo, UT"));
 });
 
