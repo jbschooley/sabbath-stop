@@ -100,6 +100,46 @@ def fetch_clusters(extent: tuple[float, float, float, float],
         raise
 
 
+# A dense cell (the Philippines, central Mexico, São Paulo) can take the
+# server longer than the timeout at zoom 20. Split it and try the quarters
+# rather than fail the whole run; retry transient errors before splitting.
+MIN_SPLIT_DEG = 0.5
+
+
+def fetch_clusters_robust(extent: tuple[float, float, float, float],
+                          limiter: RateLimiter) -> tuple[list[dict], int]:
+    """Returns (records, calls). Splits on timeout / 5xx down to MIN_SPLIT_DEG."""
+    min_lng, min_lat, max_lng, max_lat = extent
+    last: Exception | None = None
+    for attempt in range(2):
+        try:
+            return fetch_clusters(extent, limiter), attempt + 1
+        except Unauthorized:
+            raise
+        except (TimeoutError, OSError, urllib.error.URLError, json.JSONDecodeError) as e:
+            last = e
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 502, 503, 504):
+                last = e
+            else:
+                raise
+    if max(max_lng - min_lng, max_lat - min_lat) <= MIN_SPLIT_DEG:
+        raise RuntimeError(f"clusters failed for {extent}: {last}")
+    print(f"  ~ {extent} too slow ({last}); splitting", flush=True)
+    mid_lng = (min_lng + max_lng) / 2
+    mid_lat = (min_lat + max_lat) / 2
+    recs: list[dict] = []
+    calls = 2
+    for q in (
+        (min_lng, min_lat, mid_lng, mid_lat), (mid_lng, min_lat, max_lng, mid_lat),
+        (min_lng, mid_lat, mid_lng, max_lat), (mid_lng, mid_lat, max_lng, max_lat),
+    ):
+        r, c = fetch_clusters_robust(q, limiter)
+        recs.extend(r)
+        calls += c
+    return recs, calls
+
+
 def collect(regions: list[dict], names: list[str], limiter: RateLimiter):
     buildings: set[str] = set()
     units: dict[str, str] = {}
@@ -117,8 +157,8 @@ def collect(regions: list[dict], names: list[str], limiter: RateLimiter):
             lat = min_lat
             while lat < max_lat:
                 ext = (lng, lat, min(lng + step, max_lng), min(lat + step, max_lat))
-                recs = fetch_clusters(ext, limiter)
-                calls += 1
+                recs, n = fetch_clusters_robust(ext, limiter)
+                calls += n
                 for c in recs:
                     if c.get("dispersed"):
                         unresolved += 1
