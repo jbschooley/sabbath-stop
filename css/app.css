@@ -65,6 +65,9 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
    otherwise keep their intrinsic width and run off the right edge. */
 .row.tight > input { flex: 1 1 0; min-width: 0; width: auto; max-width: 100%; }
 .row.tight > .btn { flex: 0 0 auto; }
+/* A full-width primary button inside a row shares the row instead of forcing
+   the row wider than the panel (which scrollIntoView could then scroll). */
+.row.tight > .btn.primary { flex: 1 1 auto; width: auto; min-width: 0; }
 /* Icon buttons beside a text box match its height. */
 .row.tight > .btn.icon { align-self: stretch; display: inline-flex; align-items: center; justify-content: center; min-width: 38px; padding: 0 10px; }
 /* Small number boxes inside toggle labels use the same field styling. */
