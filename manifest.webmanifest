@@ -1,7 +1,7 @@
 {
   "name": "Sabbath Stop",
   "short_name": "Sabbath Stop",
-  "description": "Find a ward to attend along your driving route, timed to sacrament meeting.",
+  "description": "Find a ward on your route that starts when you get there.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
