@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-FLGRWD5SN3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-FLGRWD5SN3');
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Sabbath Stop</title>
   <meta name="description" content="Find a ward to attend along your driving route, filtered by unit type, detour cost, and arrival time relative to sacrament meeting.">
@@ -9,10 +17,10 @@
   <link rel="icon" href="brand/exit-sign.svg" type="image/svg+xml">
   <link rel="icon" href="brand/icon-32.png" sizes="32x32" type="image/png">
   <!-- iOS home-screen icons: solid background, since iOS paints transparency black -->
-  <link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon-180.png?v=2026092032">
-  <link rel="apple-touch-icon" sizes="167x167" href="brand/apple-touch-icon-167.png?v=2026092032">
-  <link rel="apple-touch-icon" sizes="152x152" href="brand/apple-touch-icon-152.png?v=2026092032">
-  <link rel="apple-touch-icon" sizes="120x120" href="brand/apple-touch-icon-120.png?v=2026092032">
+  <link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon-180.png?v=2026092033">
+  <link rel="apple-touch-icon" sizes="167x167" href="brand/apple-touch-icon-167.png?v=2026092033">
+  <link rel="apple-touch-icon" sizes="152x152" href="brand/apple-touch-icon-152.png?v=2026092033">
+  <link rel="apple-touch-icon" sizes="120x120" href="brand/apple-touch-icon-120.png?v=2026092033">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Sabbath Stop">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -20,7 +28,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/app.css?v=2026092032">
+  <link rel="stylesheet" href="css/app.css?v=2026092033">
   <!-- Cache busting without a build step. GitHub Pages serves everything with
        max-age=600, so a device that opened the app minutes before a deploy keeps
        running the old scripts. Bump the version on every deploy; the import
@@ -28,14 +36,14 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/abrp.js":      "./js/abrp.js?v=2026092032",
-      "./js/finder.js":    "./js/finder.js?v=2026092032",
-      "./js/geo.js":       "./js/geo.js?v=2026092032",
-      "./js/geocode.js":   "./js/geocode.js?v=2026092032",
-      "./js/providers.js": "./js/providers.js?v=2026092032",
-      "./js/routing.js":   "./js/routing.js?v=2026092032",
-      "./js/share.js":     "./js/share.js?v=2026092032",
-      "./js/tz.js":        "./js/tz.js?v=2026092032"
+      "./js/abrp.js":      "./js/abrp.js?v=2026092033",
+      "./js/finder.js":    "./js/finder.js?v=2026092033",
+      "./js/geo.js":       "./js/geo.js?v=2026092033",
+      "./js/geocode.js":   "./js/geocode.js?v=2026092033",
+      "./js/providers.js": "./js/providers.js?v=2026092033",
+      "./js/routing.js":   "./js/routing.js?v=2026092033",
+      "./js/share.js":     "./js/share.js?v=2026092033",
+      "./js/tz.js":        "./js/tz.js?v=2026092033"
     }
   }
   </script>
@@ -174,6 +182,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script type="module" src="js/main.js?v=2026092032"></script>
+<script type="module" src="js/main.js?v=2026092033"></script>
 </body>
 </html>

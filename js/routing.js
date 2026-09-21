@@ -21,18 +21,10 @@ export class MatrixLimitError extends Error {
 // Valhalla first (refuses any pair over 150 km, hence MatrixLimitError);
 // OSRM's table service when Valhalla is down or busy.
 export async function matrix(sources, targets, { departure } = {}) {
-  try {
-    if (!valhallaAvailable()) throw valhallaDownError();
-    return await matrixValhalla(sources, targets, departure);
-  } catch (e) {
-    if (e instanceof MatrixLimitError) throw e;
-    noteValhallaFailure(e);
-    try {
-      return await matrixOsrm(sources, targets);
-    } catch (e2) {
-      throw new Error(`Matrix failed. Valhalla: ${e.message}. OSRM: ${e2.message}`);
-    }
-  }
+  return withProviders("Matrix", {
+    valhalla: () => matrixValhalla(sources, targets, departure),
+    osrm: () => matrixOsrm(sources, targets),
+  });
 }
 
 async function matrixValhalla(sources, targets, departure) {
@@ -81,16 +73,44 @@ export async function fetchWithTimeout(url, opts = {}, ms = CALL_TIMEOUT_MS) {
   }
 }
 
-// Circuit breaker: after Valhalla fails at the transport level or with a
-// 5xx, skip it for a while and go straight to OSRM instead of paying the
-// timeout on every call.
+// Provider order is adaptive: whichever provider answered last goes first,
+// and a transport failure or 5xx flips the order and benches that provider
+// for a minute. An outage then costs one call, not one per search.
 const BREAKER_MS = 60000;
-let valhallaDownUntil = 0;
-export function valhallaAvailable() { return Date.now() >= valhallaDownUntil; }
-function noteValhallaFailure(e) {
-  if (/timed out|Failed to fetch|NetworkError|HTTP 5\d\d|^5\d\d$/i.test(e.message || "")) valhallaDownUntil = Date.now() + BREAKER_MS;
+const PREF_KEY = "ss:router";
+const downUntil = { valhalla: 0, osrm: 0 };
+let preferred = "valhalla";
+try { preferred = localStorage.getItem(PREF_KEY) === "osrm" ? "osrm" : "valhalla"; } catch { /* ignore */ }
+
+export function providerOrder() {
+  const other = preferred === "valhalla" ? "osrm" : "valhalla";
+  return [preferred, other];
 }
-function valhallaDownError() { return new Error("Valhalla skipped: recent failure"); }
+export function available(name) { return Date.now() >= downUntil[name]; }
+function noteSuccess(name) {
+  if (preferred !== name) { preferred = name; try { localStorage.setItem(PREF_KEY, name); } catch { /* ignore */ } }
+}
+function noteFailure(name, e) {
+  if (/timed out|Failed to fetch|NetworkError|Load failed|HTTP 5\d\d/i.test(e.message || "")) downUntil[name] = Date.now() + BREAKER_MS;
+}
+
+// Try each provider in order; the first success wins and becomes preferred.
+async function withProviders(kind, attempts) {
+  const errors = [];
+  for (const name of providerOrder()) {
+    if (!available(name)) { errors.push(`${name}: benched after a recent failure`); continue; }
+    try {
+      const result = await attempts[name]();
+      noteSuccess(name);
+      return result;
+    } catch (e) {
+      if (e instanceof MatrixLimitError) throw e;
+      noteFailure(name, e);
+      errors.push(`${name}: ${e.message}`);
+    }
+  }
+  throw new Error(`${kind} failed. ${errors.join(". ")}`);
+}
 
 // Time spent at intermediate stops. places[k].dwellSeconds is how long you
 // stay at stop k (origin and destination carry none). dwellBefore(legIndex)
@@ -174,18 +194,10 @@ export async function routePlaces(places, { departure } = {}) {
   const hit = cacheGet(key);
   if (hit) return hit;
 
-  let result;
-  try {
-    if (!valhallaAvailable()) throw valhallaDownError();
-    result = await routeValhalla(places, departure);
-  } catch (e) {
-    noteValhallaFailure(e);
-    try {
-      result = await routeOsrm(places);
-    } catch (e2) {
-      throw new Error(`Routing failed. Valhalla: ${e.message}. OSRM: ${e2.message}`);
-    }
-  }
+  const result = await withProviders("Routing", {
+    valhalla: () => routeValhalla(places, departure),
+    osrm: () => routeOsrm(places),
+  });
   cacheSet(key, result);
   return result;
 }
