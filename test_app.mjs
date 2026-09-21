@@ -303,12 +303,13 @@ await atest("findCandidates: showFlagged surfaces flagged units with no delta", 
   assert.equal(u5.passes, false);
 });
 
-await atest("findCandidates: a failing matrix batch falls back to a full re-route", async () => {
+await atest("findCandidates: a 'too far apart' matrix refusal splits down to a full re-route", async () => {
   const { route, tile, filters } = fixture();
   const routed = [];
+  let matrixCalls = 0;
   const deps = {
     loadTile: async () => tile,
-    matrix: async () => { throw new Error("Path distance exceeds the max distance limit"); },
+    matrix: async () => { matrixCalls++; throw new Error("Path distance exceeds the max distance limit"); },
     routeDetour: async (places) => { routed.push(places[1].name); return { legSeconds: [1830, 1830], totalSeconds: 3660 }; },
     concurrency: 1,
   };
@@ -318,6 +319,24 @@ await atest("findCandidates: a failing matrix batch falls back to a full re-rout
   assert.equal(mid.routed, true);
   assert.equal(Math.round(mid.detourMinutes), 1);
   assert.ok(Math.abs(mid.deltaMinutes + 14.5) < 0.01, String(mid.deltaMinutes));
+});
+
+await atest("findCandidates: a busy provider is retried once, not fanned out", async () => {
+  const { route, tile, filters } = fixture();
+  let matrixCalls = 0, routeCalls = 0;
+  const deps = {
+    loadTile: async () => tile,
+    matrix: async () => { matrixCalls++; throw new Error("HTTP 503"); },
+    routeDetour: async () => { routeCalls++; throw new Error("HTTP 503"); },
+    concurrency: 1,
+  };
+  const out = await findCandidates(route, filters, deps);
+  const mid = out.find((c) => c.unit.id === "u1");
+  assert.equal(mid.routed, false);
+  assert.match(mid.routeError, /503/);
+  // Each attempt issues two matrix calls (vertex->building and building->vertex).
+  assert.equal(matrixCalls, 4, "one retry after a pause, two calls per attempt");
+  assert.equal(routeCalls, 1, "single-building batch gets one route attempt");
 });
 
 await atest("findCandidates: dwell at an earlier stop delays arrival in both timing paths", async () => {
@@ -337,7 +356,7 @@ await atest("findCandidates: dwell at an earlier stop delays arrival in both tim
 
   const viaRoute = await findCandidates(route, wide, {
     loadTile: async () => tile,
-    matrix: async () => { throw new Error("no"); },
+    matrix: async () => { throw new Error("Path distance exceeds the max distance limit"); },
     routeDetour: async () => ({ legSeconds: [900, 930, 1830], totalSeconds: 3660 }),
     concurrency: 1,
   });

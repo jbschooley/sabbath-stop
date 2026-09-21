@@ -8,12 +8,32 @@ export const VALHALLA_URL = "https://valhalla1.openstreetmap.de/route";
 export const MATRIX_URL = "https://valhalla1.openstreetmap.de/sources_to_targets";
 export const OSRM_URL = "https://router.project-osrm.org/route/v1/driving";
 
+// Thrown when the matrix provider refuses a request because two points are
+// too far apart. The caller can fix that by splitting the batch; no other
+// error is worth splitting for.
+export class MatrixLimitError extends Error {
+  constructor(msg) { super(msg); this.name = "MatrixLimitError"; }
+}
+
 // Drive times from every source to every target in one call. Same road graph
 // and costing as a route request, so each cell is an exact routed leg time.
 // Returns seconds[sourceIndex][targetIndex], null where unreachable.
-// The public instance refuses the whole request if any pair is over 150 km,
-// so callers batch by position along the route.
+// Valhalla first (refuses any pair over 150 km, hence MatrixLimitError);
+// OSRM's table service when Valhalla is down or busy.
 export async function matrix(sources, targets, { departure } = {}) {
+  try {
+    return await matrixValhalla(sources, targets, departure);
+  } catch (e) {
+    if (e instanceof MatrixLimitError) throw e;
+    try {
+      return await matrixOsrm(sources, targets);
+    } catch (e2) {
+      throw new Error(`Matrix failed. Valhalla: ${e.message}. OSRM: ${e2.message}`);
+    }
+  }
+}
+
+async function matrixValhalla(sources, targets, departure) {
   const body = {
     sources: sources.map((p) => ({ lat: p.lat, lon: p.lng })),
     targets: targets.map((p) => ({ lat: p.lat, lon: p.lng })),
@@ -23,9 +43,23 @@ export async function matrix(sources, targets, { departure } = {}) {
   const resp = await fetch(MATRIX_URL, { method: "POST", body: JSON.stringify(body) });
   const json = await resp.json().catch(() => null);
   if (!resp.ok || !json || !json.sources_to_targets) {
-    throw new Error((json && json.error) || `matrix HTTP ${resp.status}`);
+    const msg = (json && json.error) || `HTTP ${resp.status}`;
+    if (resp.status === 400 && /distance/i.test(msg)) throw new MatrixLimitError(msg);
+    throw new Error(msg);
   }
   return json.sources_to_targets.map((row) => row.map((cell) => (cell && cell.time != null ? cell.time : null)));
+}
+
+// OSRM table: coordinates are sources then targets; durations[s][t] seconds.
+async function matrixOsrm(sources, targets) {
+  const coords = [...sources, ...targets].map((p) => `${p.lng},${p.lat}`).join(";");
+  const src = sources.map((_, i) => i).join(";");
+  const dst = targets.map((_, i) => sources.length + i).join(";");
+  const url = `${OSRM_URL.replace("/route/", "/table/")}/${coords}?sources=${src}&destinations=${dst}&annotations=duration`;
+  const resp = await fetch(url);
+  const json = await resp.json().catch(() => null);
+  if (!resp.ok || !json || json.code !== "Ok" || !json.durations) throw new Error((json && json.message) || `HTTP ${resp.status}`);
+  return json.durations.map((row) => row.map((v) => (v == null ? null : v)));
 }
 
 // Time spent at intermediate stops. places[k].dwellSeconds is how long you

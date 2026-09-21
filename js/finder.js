@@ -261,20 +261,29 @@ export async function findCandidates(route, filters, deps) {
     });
   };
 
-  // Try a batch through the matrix; on failure split it, and at size one fall
-  // back to a full re-route so a single odd building can't sink its batch.
-  const runBatch = async (batch) => {
+  // Try a batch through the matrix. Only a "too far apart" refusal is worth
+  // splitting the batch for; when the providers are down or busy, one more
+  // try after a pause, then mark the batch unknown rather than fanning out
+  // into a storm of single-building requests against a struggling server.
+  const isLimit = (e) => e && (e.name === "MatrixLimitError" || /distance/i.test(e.message || ""));
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+  const runBatch = async (batch, retried = false) => {
     try {
       await detourByMatrix(batch);
     } catch (e) {
-      if (batch.length > 1) {
+      if (isLimit(e) && batch.length > 1) {
         const mid = Math.ceil(batch.length / 2);
         await runBatch(batch.slice(0, mid));
         await runBatch(batch.slice(mid));
         return;
       }
-      try { await detourByRoute(batch[0]); }
-      catch (e2) { for (const c of batch[0].cands) c.routeError = e2.message || String(e2); }
+      if (!retried) { await pause(2000); return runBatch(batch, true); }
+      if (batch.length === 1) {
+        try { await detourByRoute(batch[0]); }
+        catch (e2) { for (const c of batch[0].cands) c.routeError = e2.message || String(e2); }
+      } else {
+        for (const job of batch) for (const c of job.cands) c.routeError = e.message || String(e);
+      }
     }
     done += batch.length;
     // Hand back the partial result so the UI can fill in as batches land.
