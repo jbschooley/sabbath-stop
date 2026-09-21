@@ -10,7 +10,7 @@ import { dwellBefore, applyDwell } from "./js/routing.js";
 import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
 import { deflateRawSync } from "node:zlib";
 import { encodeShare, decodeShare, sharePayloadFrom, shareUrl } from "./js/share.js";
-import { rankSuggestions } from "./js/geocode.js";
+import { rankSuggestions, label } from "./js/geocode.js";
 import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes, googleWaypointCoords } from "./js/providers.js";
 
 let passed = 0, failed = 0;
@@ -391,6 +391,12 @@ test("Google URL with coordinates yields lat/lng places", () => {
 });
 test("short Google links are refused with a helpful message", () => {
   assert.throws(() => parseGoogleUrl("https://maps.app.goo.gl/abc123"), /paste the full/);
+});
+
+test("geocoder label carries the street line so two branches in one city differ", () => {
+  assert.equal(label({ name: "Costa Vida", housenumber: "801", street: "West Main Street", city: "Boise", state: "Idaho", country: "United States" }), "Costa Vida, 801 West Main Street, Boise, Idaho");
+  assert.equal(label({ name: "Boise", city: "Boise", state: "Idaho", country: "United States" }), "Boise, Idaho");
+  assert.equal(label({ name: "Munich", state: "Bavaria", country: "Germany" }), "Munich, Bavaria, Germany");
 });
 
 test("Google link: a searched place takes its coordinates from the data blob", () => {

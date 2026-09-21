@@ -5,8 +5,12 @@ export const PHOTON_URL = "https://photon.komoot.io";
 
 const memo = new Map();
 
-function label(props) {
+// "Costa Vida, 801 West Main Street, Boise, Idaho": the street line tells
+// two branches in one city apart, the way Google's picker does.
+export function label(props) {
+  const street = [props.housenumber, props.street].filter(Boolean).join(" ");
   const bits = [props.name];
+  if (street && street !== props.name) bits.push(street);
   if (props.city && props.city !== props.name) bits.push(props.city);
   if (props.state) bits.push(props.state);
   if (props.country && props.country !== "United States") bits.push(props.country);

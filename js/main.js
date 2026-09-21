@@ -278,7 +278,13 @@ function attachSuggest(input, list, onPick) {
   const close = () => { list.hidden = true; list.innerHTML = ""; items = []; active = -1; };
   const show = (places) => {
     items = places; active = -1;
-    list.innerHTML = places.map((p) => `<li role="option">${escapeHtml(p.name)}<span class="kind">${escapeHtml(p.kind || "")}</span></li>`).join("");
+    list.innerHTML = places.map((p) => {
+      const [head, ...rest] = p.name.split(", ");
+      // A settlement's kind tells "Boise" the city from the county; a
+      // business is told apart by its street line, so its tag is noise.
+      const kind = /^(place|boundary):/.test(p.kind || "") ? p.kind.split(":")[1].replace(/_/g, " ") : "";
+      return `<li role="option"><b>${escapeHtml(head)}</b>${rest.length ? `<span class="detail">, ${escapeHtml(rest.join(", "))}</span>` : ""}${kind ? `<span class="kind">${escapeHtml(kind)}</span>` : ""}</li>`;
+    }).join("");
     list.hidden = places.length === 0;
     [...list.children].forEach((li, i) => li.addEventListener("mousedown", (e) => { e.preventDefault(); pick(i); }));
   };

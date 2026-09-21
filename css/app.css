@@ -94,6 +94,9 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 }
 .suggest li { padding: 6px 10px; cursor: pointer; font-size: 14px; }
 .suggest li:hover, .suggest li[aria-selected="true"] { background: var(--bg); }
+.suggest li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggest li b { font-weight: 600; }
+.suggest li .detail { color: var(--muted); }
 .suggest li .kind { color: var(--muted); font-size: 12px; margin-left: 6px; }
 
 /* The stop list: a gutter of glyphs joined by a dotted line, one row per place. */
