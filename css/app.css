@@ -49,7 +49,6 @@ body { overflow-x: hidden; }
 .brand .logo { width: 36px; height: 36px; flex: 0 0 auto; border-radius: 8px; }
 h1 { font-size: 20px; margin: 0 0 2px; }
 .tagline { color: var(--muted); margin: 0; font-size: 13px; font-style: italic; }
-.tagline .attrib { font-style: normal; font-size: 11px; opacity: .75; margin-left: 4px; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 8px; }
 
 .field { margin-bottom: 10px; }
