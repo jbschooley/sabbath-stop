@@ -31,7 +31,7 @@ and I will change or stop it.
 
 ## Using it
 
-The app is live at <https://jbschooley.github.io/sabbath-stop/>. It follows
+The app is live at <https://sabbathstop.com/>. It follows
 the design in [`APP_SPEC.md`](APP_SPEC.md).
 
 1. **Give it a route.** Type a start and a destination, add stops if you

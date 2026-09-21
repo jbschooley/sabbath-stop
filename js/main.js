@@ -287,7 +287,7 @@ async function useMyLocation() {
 }
 
 // The picker holds a wall-clock time. It means that time at the ORIGIN: the
-// same as the phone's clock when you start from where you are, but a trip
+// same as the device's clock when you start from where you are, but a trip
 // planned from Utah that starts in California leaves at 8:00 Pacific.
 function readDeparture(originTz) {
   const v = $("departure").value;
@@ -307,7 +307,7 @@ async function resolveOrigin() {
   return { ...hit, name: text };
 }
 
-// Note under the picker when the origin's zone differs from the phone's.
+// Note under the picker when the origin's zone differs from the device's.
 async function updateDepartureZoneNote() {
   const el = $("departure-tz");
   const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -316,7 +316,7 @@ async function updateDepartureZoneNote() {
   const tz = await tzAt(o.lng, o.lat);
   if (tz === localTz) { el.hidden = true; return; }
   const now = new Date();
-  el.textContent = `Departure is read in the starting point's zone: ${tzAbbrev(now, tz)} (your phone is on ${tzAbbrev(now, localTz)}).`;
+  el.textContent = `Departure is read in the starting point's zone: ${tzAbbrev(now, tz)} (your device is on ${tzAbbrev(now, localTz)}).`;
   el.hidden = false;
 }
 
@@ -382,7 +382,7 @@ function fillForm(places, dwellMins, departure, sourceWord) {
   });
   if (departure) {
     // An absolute instant from a link: show it as wall-clock time at the
-    // origin when the origin's zone is known, else in the phone's zone.
+    // origin when the origin's zone is known, else in the device's zone.
     const o = places[0];
     const setPicker = (tz) => { $("departure").value = tz ? wallClockValue(departure, tz) : toDatetimeLocal(departure); saveDeparture($("departure").value); };
     if (o && typeof o.lng === "number") tzAt(o.lng, o.lat).then(setPicker);
@@ -516,7 +516,7 @@ async function buildRoute() {
         return buildRoute();
       }
       // A track file's own timestamps win when it has them; otherwise the
-      // picker is read in the phone's zone since the file has no origin yet.
+      // picker is read in the device's zone since the file has no origin yet.
       return await fromTrackFile(await f.text(), f.name, readDeparture());
     } catch (e) { showFieldError("file-error", e.message); throw e; }
   }
@@ -979,7 +979,7 @@ function boot() {
   $("use-location").addEventListener("click", useMyLocation);
   $("link").addEventListener("input", saveRouteInput);
   // Import as soon as a link lands in the field, whether pasted or typed.
-  // Errors show right under the field, where a phone user is looking.
+  // Errors show right under the field, where a user on a small screen is looking.
   const tryImport = async () => {
     if (!$("link").value.trim()) { showFieldError("link-error", ""); return; }
     try { await importLink(); showFieldError("link-error", ""); }
