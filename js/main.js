@@ -925,12 +925,14 @@ function wireInfoHints() {
     const heading = field && !label && field.previousElementSibling && field.previousElementSibling.tagName === "H2"
       ? field.previousElementSibling : null;
     const prev = hint.previousElementSibling;
-    if (label) label.appendChild(btn);
-    else if (heading) heading.appendChild(btn);
-    else if (prev && prev.tagName === "H2") prev.appendChild(btn); // a section note right under its heading
-    else if (prev && prev.tagName === "BUTTON") prev.after(btn);
-    else if (prev && prev.classList.contains("row")) prev.appendChild(btn); // a row of buttons
-    else hint.parentNode.insertBefore(btn, hint);
+    let anchor; // the element that carries the (i); the note opens right below it
+    if (label) { label.appendChild(btn); anchor = label; }
+    else if (heading) { heading.appendChild(btn); anchor = heading; }
+    else if (prev && prev.tagName === "H2") { prev.appendChild(btn); anchor = prev; }
+    else if (prev && prev.tagName === "BUTTON") { prev.after(btn); anchor = prev; }
+    else if (prev && prev.classList.contains("row")) { prev.appendChild(btn); anchor = prev; }
+    else { hint.parentNode.insertBefore(btn, hint); anchor = btn; }
+    anchor.after(hint);
   }
 }
 function fmtDuration(sec) {
