@@ -53,6 +53,14 @@ Wards that match your unit type but not your timing show up greyed out. That
 is on purpose. Three wards that all start before you arrive is a reason to
 leave twenty minutes earlier, not a dead end.
 
+**It works offline once you have a plan.** Add it to your home screen and
+the app opens without a connection, showing the last plan you made. Move
+the departure to when you are actually leaving and every arrival moves with
+it, with the meeting-day check redone for the new day, so "I'm running
+forty minutes late" has an answer in a dead zone. Changing stops or planning
+a new route needs a connection. The base map only shows the areas you have
+already looked at.
+
 **Before you rely on a time, check it.** Every result links to its page on
 the official [Meetinghouse Locator](https://maps.churchofjesuschrist.org/).
 Meeting times are maintained by local stakes and drift, especially after

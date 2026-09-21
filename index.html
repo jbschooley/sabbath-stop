@@ -17,10 +17,10 @@
   <link rel="icon" href="brand/exit-sign.svg" type="image/svg+xml">
   <link rel="icon" href="brand/icon-32.png" sizes="32x32" type="image/png">
   <!-- iOS home-screen icons: solid background, since iOS paints transparency black -->
-  <link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon-180.png?v=2026092046">
-  <link rel="apple-touch-icon" sizes="167x167" href="brand/apple-touch-icon-167.png?v=2026092046">
-  <link rel="apple-touch-icon" sizes="152x152" href="brand/apple-touch-icon-152.png?v=2026092046">
-  <link rel="apple-touch-icon" sizes="120x120" href="brand/apple-touch-icon-120.png?v=2026092046">
+  <link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon-180.png?v=2026092050">
+  <link rel="apple-touch-icon" sizes="167x167" href="brand/apple-touch-icon-167.png?v=2026092050">
+  <link rel="apple-touch-icon" sizes="152x152" href="brand/apple-touch-icon-152.png?v=2026092050">
+  <link rel="apple-touch-icon" sizes="120x120" href="brand/apple-touch-icon-120.png?v=2026092050">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Sabbath Stop">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/app.css?v=2026092046">
+  <link rel="stylesheet" href="css/app.css?v=2026092050">
   <!-- Cache busting without a build step. GitHub Pages serves everything with
        max-age=600, so a device that opened the app minutes before a deploy keeps
        running the old scripts. Bump the version on every deploy; the import
@@ -36,14 +36,15 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/abrp.js":      "./js/abrp.js?v=2026092046",
-      "./js/finder.js":    "./js/finder.js?v=2026092046",
-      "./js/geo.js":       "./js/geo.js?v=2026092046",
-      "./js/geocode.js":   "./js/geocode.js?v=2026092046",
-      "./js/providers.js": "./js/providers.js?v=2026092046",
-      "./js/routing.js":   "./js/routing.js?v=2026092046",
-      "./js/share.js":     "./js/share.js?v=2026092046",
-      "./js/tz.js":        "./js/tz.js?v=2026092046"
+      "./js/abrp.js":      "./js/abrp.js?v=2026092050",
+      "./js/finder.js":    "./js/finder.js?v=2026092050",
+      "./js/geo.js":       "./js/geo.js?v=2026092050",
+      "./js/geocode.js":   "./js/geocode.js?v=2026092050",
+      "./js/plan.js":      "./js/plan.js?v=2026092050",
+      "./js/providers.js": "./js/providers.js?v=2026092050",
+      "./js/routing.js":   "./js/routing.js?v=2026092050",
+      "./js/share.js":     "./js/share.js?v=2026092050",
+      "./js/tz.js":        "./js/tz.js?v=2026092050"
     }
   }
   </script>
@@ -58,6 +59,8 @@
         <p class="tagline">“With joy wend your way.”</p>
       </div>
     </div>
+
+    <p class="offline-note" id="offline-note" hidden>Offline. Your last plan is shown; changing the departure or filters updates its times. New routes and stops need a connection.</p>
 
     <h2>When are you leaving?</h2>
     <div class="field">
@@ -170,6 +173,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script type="module" src="js/main.js?v=2026092046"></script>
+<script type="module" src="js/main.js?v=2026092050"></script>
 </body>
 </html>

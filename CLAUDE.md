@@ -15,7 +15,10 @@ Public repo, deployed to GitHub Pages. Static site, no backend.
   Pages from `main`). `index.html`, `js/`, `css/`; tests in `test_app.mjs`
   (`node test_app.mjs`). Every deploy must bump the version stamp in
   `index.html` (the `?v=` on the stylesheet, the import map, and the module
-  script) or devices keep the old scripts for ten minutes.
+  script) **and the matching `VERSION` in `sw.js`**, or devices keep the old
+  scripts: ten minutes from the Pages cache, indefinitely from the service
+  worker's shell cache, which is named by that version. A new module in
+  `js/` goes in the import map and in the `sw.js` precache list.
 - **The locator API requires an `Origin` header for its own site** or it
   returns 401. `harvest.py` and `verify.py` send it. Preflight and the
   `utah-test` harvest were run successfully with it on 2026-09-20.

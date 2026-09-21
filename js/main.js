@@ -9,6 +9,7 @@ import { defaultDwellMinutes, fromPlaces, fromTrackFile, looksLikeAbrpFile, pars
 import { applyDwell, dwellBefore, matrix, routePlaces } from "./routing.js";
 import { decodeShare, sharePayloadFrom, shareUrl } from "./share.js";
 import { defaultDepartureLocal, fmtDateTime, fmtHHMM, fmtTime, instantFromWallClock, isGeneralConference, toDatetimeLocal, tzAbbrev, wallClockValue } from "./tz.js";
+import { inputsKey, loadPlan, planStore, savePlan, shiftPlan } from "./plan.js";
 
 const $ = (id) => document.getElementById(id);
 const FILTERS_KEY = "ss:filters:v2"; // bumped when defaults change so they take effect
@@ -786,6 +787,7 @@ function applyTrafficTime(route) {
 async function go() {
   if (!state.filters.subtypes.length) return setStatus("Pick at least one unit type first.", true);
   const btn = $("go");
+  if (navigator.onLine === false) return showSavedPlan("offline");
   setBusy(btn, true, "Finding…");
   clearResults();
   try {
@@ -799,7 +801,7 @@ async function go() {
     applyTrafficTime(route);
     state.route = route;
     drawRoute(route);
-    renderRouteSummary(route);
+    const zones = await renderRouteSummary(route);
     setStatus("Finding wards…");
     const candidates = await findCandidates(route, state.filters, {
       loadTile,
@@ -816,23 +818,63 @@ async function go() {
     render();
     const n = candidates.filter((c) => c.passes).length;
     setStatus(n ? `${n} ward${n === 1 ? "" : "s"} fit your filters.` : "Nothing fits. Greyed pins show near misses; try shifting departure or widening the window.");
+    savePlan(planStore(), { route, candidates, zones, inputsKey: inputsKey(routeSnapshot()) });
   } catch (e) {
     console.error(e);
+    // A dead connection mid-search: the saved plan is better than an error.
+    if (/Failed to fetch|timed out|NetworkError|Load failed|failed\./i.test(e.message || "") && navigator.onLine !== true) {
+      setBusy(btn, false);
+      return showSavedPlan("offline");
+    }
     setStatus(e.message || String(e), true);
   } finally {
     setBusy(btn, false);
   }
 }
 
+// Show the plan saved by the last successful search, moved to the departure
+// in the picker. "offline" is the fallback when a search can't run; "boot"
+// puts the last plan back on screen when the app opens.
+async function showSavedPlan(mode) {
+  const saved = await loadPlan(planStore());
+  const offline = mode === "offline";
+  if (!saved) {
+    if (offline) setStatus("You're offline and no plan is saved yet. Planning a route needs a connection.", true);
+    return false;
+  }
+  if (saved.inputsKey !== inputsKey(routeSnapshot())) {
+    if (offline) setStatus("You're offline. The saved plan is for a different route; changing stops needs a connection.", true);
+    return false;
+  }
+  let departure;
+  try { departure = readDeparture(saved.zones[0]); } catch (e) { if (offline) setStatus(e.message, true); return false; }
+  const plan = shiftPlan(saved, departure);
+  clearResults();
+  state.route = plan.route;
+  drawRoute(plan.route);
+  await renderRouteSummary(plan.route, plan.zones);
+  state.candidates = plan.candidates;
+  render();
+  const n = plan.candidates.filter((c) => c.passes).length;
+  const fits = n ? `${n} ward${n === 1 ? "" : "s"} fit your filters.` : "Nothing fits.";
+  const when = fmtDateTime(new Date(saved.savedAt), Intl.DateTimeFormat().resolvedOptions().timeZone);
+  setStatus(offline
+    ? `${fits} Offline: this is the plan saved ${when}, with its times moved to your departure. Stops can't change without a connection.`
+    : `${fits} This is your last plan, saved ${when}. Press Find wards to plan again.`);
+  return true;
+}
+
 // The route line persists above the results; the status line is transient.
 // Every time is shown in the zone of the place it happens at, with the zone
 // abbreviation whenever that differs from the browser's zone.
-async function renderRouteSummary(route) {
+async function renderRouteSummary(route, knownZones) {
   const el = $("route-summary");
   const dwell = route.dwellSeconds || 0;
   const arrive = new Date(route.departure.getTime() + route.totalSeconds * 1000);
   const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const zones = await Promise.all(route.places.map((p) => tzAt(p.lng, p.lat)));
+  const zones = knownZones && knownZones.length === route.places.length
+    ? knownZones
+    : await Promise.all(route.places.map((p) => tzAt(p.lng, p.lat)));
   const destTz = zones[zones.length - 1];
   const parts = [
     `${route.totalMiles.toFixed(0)} mi`,
@@ -848,6 +890,7 @@ async function renderRouteSummary(route) {
   el.textContent = parts.join(" · ");
   el.hidden = false;
   renderItinerary(itineraryFromRoute(route, zones, localTz));
+  return zones;
 }
 
 // ---------------------------------------------------------------- render
@@ -1223,11 +1266,19 @@ async function boot() {
   panel.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   $("go").addEventListener("click", go);
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "text") go(); });
+  // Offline: the shell and the last plan come from the service worker and
+  // localStorage; the banner says what still works.
+  const offlineNote = () => { $("offline-note").hidden = navigator.onLine !== false; };
+  window.addEventListener("online", offlineNote);
+  window.addEventListener("offline", offlineNote);
+  offlineNote();
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch((e) => console.warn("service worker", e.message));
   await loadDataset();
   // A shared link that carries a complete plan runs itself.
   const ends = stopEntries();
   const filled = (e) => e && (e.place || (e.text || "").trim());
   if (shared && state.filters.subtypes.length && filled(ends[0]) && filled(ends[ends.length - 1])) go();
+  else if (!shared) showSavedPlan(navigator.onLine === false ? "offline" : "boot");
 }
 
 boot();

@@ -9,6 +9,7 @@ import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exi
 import { dwellBefore, applyDwell } from "./js/routing.js";
 import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
 import { deflateRawSync } from "node:zlib";
+import { inputsKey, serializePlan, revivePlan, shiftPlan, savePlan, loadPlan, planStore } from "./js/plan.js";
 import { encodeShare, decodeShare, sharePayloadFrom, shareUrl } from "./js/share.js";
 import { rankSuggestions, label } from "./js/geocode.js";
 import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes, googleWaypointCoords } from "./js/providers.js";
@@ -655,6 +656,103 @@ test("share: bad or missing fragments are rejected cleanly", () => {
   assert.equal(sharePayloadFrom(""), null);
   assert.equal(sharePayloadFrom("#other"), null);
   assert.throws(() => decodeShare(encodeShare({ v: 99 }).replace(/./, "A")), Error);
+});
+
+
+// ---------------------------------------------------------------- saved plan
+
+console.log("plan");
+function samplePlan() {
+  const departure = new Date("2026-09-27T14:00:00Z"); // 08:00 MDT Sunday
+  const route = {
+    departure, points: [{ lng: -112, lat: 40, t: 0, d: 0, leg: 0 }, { lng: -111.5, lat: 40.001234567, t: 1800.04, d: 26.5, leg: 0 }],
+    places: [{ name: "A", lng: -112, lat: 40 }, { name: "B", lng: -111, lat: 40 }], legSeconds: [3600], totalSeconds: 3600, driveSeconds: 3600, dwellSeconds: 0, totalMiles: 53, provider: "valhalla",
+  };
+  const building = { id: "b", name: "Mid", lng: -111.5, lat: 40.01, tz: "America/Denver", city: "X", state: "UT" };
+  const eta = new Date(departure.getTime() + 1800 * 1000); // 08:30
+  const c = (id, start, extra = {}) => ({
+    unit: { id, name: id, subType: "YSA", start, day: "SUNDAY" }, building, milesAlongRoute: 26.5, offRouteMiles: 0.7,
+    etaAtNearestPoint: eta, startInstant: new Date(`2026-09-27T${start}:00-06:00`), meetsOn: "SUNDAY", wrongDay: false,
+    deltaMinutes: null, detourMinutes: 4, arrivalAtBuilding: new Date(eta.getTime() + 2 * 60000), routed: true, passes: true, needsDetour: true, legIndex: 0, vertexIndex: 1, ...extra,
+  });
+  const candidates = [c("u1", "08:45"), c("u2", "13:00")];
+  for (const x of candidates) x.deltaMinutes = (x.arrivalAtBuilding - x.startInstant) / 60000;
+  return { route, candidates, zones: ["America/Denver", "America/Denver"], inputsKey: "k", savedAt: 1 };
+}
+
+test("inputsKey ignores typed text and ids, keys on places, dwell and the drive-time override", () => {
+  const a = { stops: [{ id: "x", text: "Provo", place: { lng: -111.65871, lat: 40.23373 }, dwellMin: 0 }, { id: "y", text: "Boise, Idaho", place: { lng: -116.2, lat: 43.6 }, dwellMin: 0 }], trafficH: "", trafficM: "" };
+  const b = { stops: [{ id: "q", text: "Provo, Utah", place: { lng: -111.658712, lat: 40.233731 }, dwellMin: 0 }, { id: "r", text: "Boise", place: { lng: -116.2, lat: 43.6 }, dwellMin: 0 }], trafficH: "", trafficM: "" };
+  assert.equal(inputsKey(a), inputsKey(b));
+  assert.notEqual(inputsKey(a), inputsKey({ ...a, trafficH: "5" }));
+  assert.notEqual(inputsKey(a), inputsKey({ ...a, stops: [a.stops[0], { ...a.stops[1], dwellMin: 20 }] }));
+});
+
+test("a plan survives JSON with its dates and route points intact", () => {
+  const plan = samplePlan();
+  const back = revivePlan(JSON.parse(JSON.stringify(serializePlan(plan))));
+  assert.equal(back.route.departure.getTime(), plan.route.departure.getTime());
+  assert.equal(back.route.points.length, 2);
+  assert.equal(back.route.points[1].lat, 40.00123);
+  assert.equal(back.route.points[1].t, 1800);
+  assert.equal(back.candidates[0].arrivalAtBuilding.getTime(), plan.candidates[0].arrivalAtBuilding.getTime());
+  assert.equal(back.candidates[0].startInstant.getTime(), plan.candidates[0].startInstant.getTime());
+  assert.equal(back.candidates[0].building.tz, "America/Denver");
+  assert.equal(revivePlan({ v: 99 }), null);
+  assert.equal(revivePlan(null), null);
+});
+
+test("shifting a plan 40 minutes later moves every arrival and delta by 40 minutes", () => {
+  const plan = samplePlan();
+  const later = new Date(plan.route.departure.getTime() + 40 * 60000);
+  const out = shiftPlan(plan, later);
+  assert.equal(out.route.departure.getTime(), later.getTime());
+  assert.equal(out.candidates[0].arrivalAtBuilding.getTime(), plan.candidates[0].arrivalAtBuilding.getTime() + 40 * 60000);
+  assert.ok(Math.abs(out.candidates[0].deltaMinutes - (plan.candidates[0].deltaMinutes + 40)) < 1e-9);
+  assert.equal(out.candidates[0].startInstant.getTime(), plan.candidates[0].startInstant.getTime(), "same meeting, same day");
+  assert.equal(out.candidates[0].wrongDay, false);
+  // The original is untouched.
+  assert.equal(plan.candidates[0].arrivalAtBuilding.getTime(), plan.candidates[0].startInstant.getTime() + plan.candidates[0].deltaMinutes * 60000);
+});
+
+test("shifting a plan onto Monday finds no meeting; onto next Sunday finds it again", () => {
+  const plan = samplePlan();
+  const monday = shiftPlan(plan, new Date(plan.route.departure.getTime() + 24 * 3600 * 1000));
+  assert.ok(monday.candidates.every((c) => c.wrongDay && c.deltaMinutes === null && c.startInstant === null));
+  const nextSunday = shiftPlan(plan, new Date(plan.route.departure.getTime() + 7 * 24 * 3600 * 1000));
+  assert.ok(nextSunday.candidates.every((c) => !c.wrongDay));
+  assert.equal(nextSunday.candidates[0].startInstant.getTime(), plan.candidates[0].startInstant.getTime() + 7 * 24 * 3600 * 1000);
+  assert.ok(Math.abs(nextSunday.candidates[0].deltaMinutes - plan.candidates[0].deltaMinutes) < 1e-9);
+});
+
+test("an unrouted candidate's delta shifts from its nearest-point time", () => {
+  const plan = samplePlan();
+  plan.candidates[0].routed = false;
+  plan.candidates[0].deltaMinutes = (plan.candidates[0].etaAtNearestPoint - plan.candidates[0].startInstant) / 60000;
+  const out = shiftPlan(plan, new Date(plan.route.departure.getTime() + 10 * 60000));
+  assert.ok(Math.abs(out.candidates[0].deltaMinutes - (plan.candidates[0].deltaMinutes + 10)) < 1e-9);
+});
+
+await atest("savePlan and loadPlan round-trip through a store and tolerate a full one", async () => {
+  let text = null;
+  const store = { get: async () => text, set: async (t) => { text = t; } };
+  assert.equal(await savePlan(store, samplePlan()), true);
+  const back = await loadPlan(store);
+  assert.equal(back.candidates.length, 2);
+  assert.equal(back.candidates[1].building, back.candidates[0].building, "one building object shared by its units");
+  assert.equal("units" in back.candidates[0].building, false);
+  const origWarn = console.warn; console.warn = () => {};
+  try {
+    const full = { get: async () => null, set: async () => { throw new Error("QuotaExceededError"); } };
+    assert.equal(await savePlan(full, samplePlan()), false);
+    assert.equal(await loadPlan(full), null);
+  } finally { console.warn = origWarn; }
+});
+
+test("planStore prefers the Cache API and falls back to localStorage", () => {
+  const ls = { getItem: () => "x", setItem: () => {} };
+  assert.ok(planStore({ localStorage: ls }).get);
+  assert.ok(planStore({ caches: { open: async () => ({}) }, localStorage: ls }).set);
 });
 
 console.log(failed ? `\n${failed} FAILED, ${passed} passed` : `\nall ${passed} tests passed`);
