@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sabbath Stop">
+  <!-- Highway exit panel: green board, white inset border, meetinghouse, exit arrow -->
+  <rect x="24" y="24" width="464" height="464" rx="72" fill="#1f7a4d"/>
+  <rect x="58" y="58" width="396" height="396" rx="46" fill="none" stroke="#ffffff" stroke-width="14"/>
+  <!-- Meetinghouse: long low body, shallow gable, tall slender central steeple -->
+  <g fill="#ffffff" transform="translate(0,-34)">
+    <!-- spire -->
+    <polygon points="256,92 268,166 244,166"/>
+    <!-- steeple tower with a slightly wider base -->
+    <rect x="243" y="162" width="26" height="70"/>
+    <rect x="234" y="226" width="44" height="22"/>
+    <!-- roof: shallow gable across the whole body -->
+    <polygon points="104,290 408,290 256,236"/>
+    <!-- body -->
+    <rect x="118" y="286" width="276" height="86"/>
+    <!-- eave line -->
+    <rect x="104" y="286" width="304" height="10"/>
+    <!-- door and windows cut in green -->
+    <rect x="244" y="326" width="24" height="46" fill="#1f7a4d"/>
+    <rect x="150" y="318" width="16" height="30" fill="#1f7a4d"/>
+    <rect x="186" y="318" width="16" height="30" fill="#1f7a4d"/>
+    <rect x="310" y="318" width="16" height="30" fill="#1f7a4d"/>
+    <rect x="346" y="318" width="16" height="30" fill="#1f7a4d"/>
+  </g>
+  <!-- exit arrow, bottom right, below the building -->
+  <g fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M318 430 L318 416 Q318 404 330 404 L404 404"/>
+    <polyline points="380,380 406,404 380,428"/>
+  </g>
+</svg>

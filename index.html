@@ -5,10 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Sabbath Stop</title>
   <meta name="description" content="Find a ward to attend along your driving route, filtered by unit type, detour cost, and arrival time relative to sacrament meeting.">
+  <meta name="theme-color" content="#1f7a4d">
+  <link rel="icon" href="brand/exit-sign.svg" type="image/svg+xml">
+  <link rel="icon" href="brand/icon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="brand/icon-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/app.css?v=2026092014">
+  <link rel="stylesheet" href="css/app.css?v=2026092015">
   <!-- Cache busting without a build step. GitHub Pages serves everything with
        max-age=600, so a phone that opened the app minutes before a deploy keeps
        running the old scripts. Bump the version on every deploy; the import
@@ -16,13 +21,13 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/abrp.js":      "./js/abrp.js?v=2026092014",
-      "./js/finder.js":    "./js/finder.js?v=2026092014",
-      "./js/geo.js":       "./js/geo.js?v=2026092014",
-      "./js/geocode.js":   "./js/geocode.js?v=2026092014",
-      "./js/providers.js": "./js/providers.js?v=2026092014",
-      "./js/routing.js":   "./js/routing.js?v=2026092014",
-      "./js/tz.js":        "./js/tz.js?v=2026092014"
+      "./js/abrp.js":      "./js/abrp.js?v=2026092015",
+      "./js/finder.js":    "./js/finder.js?v=2026092015",
+      "./js/geo.js":       "./js/geo.js?v=2026092015",
+      "./js/geocode.js":   "./js/geocode.js?v=2026092015",
+      "./js/providers.js": "./js/providers.js?v=2026092015",
+      "./js/routing.js":   "./js/routing.js?v=2026092015",
+      "./js/tz.js":        "./js/tz.js?v=2026092015"
     }
   }
   </script>
@@ -30,8 +35,13 @@
 <body>
 <div class="app">
   <aside class="panel">
-    <h1>Sabbath Stop</h1>
-    <p class="tagline">Find a ward along your drive, timed to sacrament meeting.</p>
+    <div class="brand">
+      <img class="logo" src="brand/exit-sign.svg" alt="" width="36" height="36">
+      <div>
+        <h1>Sabbath Stop</h1>
+        <p class="tagline">Find a ward along your drive, timed to sacrament meeting.</p>
+      </div>
+    </div>
 
     <h2>When are you leaving?</h2>
     <div class="field">
@@ -152,6 +162,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script type="module" src="js/main.js?v=2026092014"></script>
+<script type="module" src="js/main.js?v=2026092015"></script>
 </body>
 </html>

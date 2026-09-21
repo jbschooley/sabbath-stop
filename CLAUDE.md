@@ -1,6 +1,7 @@
 # Sabbath Stop
 
-Finds LDS units along a driving route, filtered by unit type, detour cost, and
+Finds wards and branches of The Church of Jesus Christ of Latter-day Saints
+along a driving route, filtered by unit type, detour cost, and
 how early or late you'd arrive relative to the meeting start.
 
 Public repo, deployed to GitHub Pages. Static site, no backend.

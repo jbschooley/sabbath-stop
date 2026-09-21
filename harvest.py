@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Harvest LDS meetinghouse + unit data from the public Meetinghouse Locator.
+Harvest meetinghouse + unit data for The Church of Jesus Christ of Latter-day
+Saints from its public Meetinghouse Locator.
 
 Strategy
 --------
