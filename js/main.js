@@ -658,13 +658,14 @@ let map, routeLayer, clusterOn, clusterOff;
 
 function initMap() {
   map = L.map("map", { zoomControl: true }).setView([39.5, -111.5], 6);
-  // CARTO's Voyager basemap: OpenStreetMap data, served with a 2x variant so
-  // phones get crisp tiles ({r} becomes "@2x" on high-DPI screens). Free for
-  // non-commercial use with attribution; OSM's own tiles have no 2x version.
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-    maxZoom: 20,
-    subdomains: "abcd",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  // OpenStreetMap's standard tiles: keyless, but 256px with no 2x variant, so
+  // they look soft on high-DPI phones. CARTO's basemaps now watermark without
+  // an API key, so they are not an option. A sharper map means a provider
+  // account (Stadia or MapTiler free tiers, domain-restricted rather than a
+  // key in the page) or self-hosting; see APP_SPEC on basemaps.
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
   clusterOn = L.markerClusterGroup({ maxClusterRadius: 40 });
   clusterOff = L.markerClusterGroup({ maxClusterRadius: 60, iconCreateFunction: mutedClusterIcon });
