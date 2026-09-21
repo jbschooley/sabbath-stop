@@ -181,7 +181,10 @@ def collect(regions: list[dict], names: list[str], limiter: RateLimiter):
     return buildings, units, where, unresolved, calls
 
 
-MAX_PROBES = 50
+# Every miss gets probed; this only stops a completely broken harvest from
+# turning the check into a second sweep. Worldwide, upstream quirks alone
+# run to a couple of hundred.
+MAX_PROBES = 600
 
 
 def explain(missing_b: list[str], missing_u: list[str], where: dict, cu: dict,
@@ -191,9 +194,9 @@ def explain(missing_b: list[str], missing_u: list[str], where: dict, cu: dict,
     Only one outcome is the sweep's fault: identify returns the item right
     there and the sweep still didn't collect it. Everything else is an
     upstream inconsistency the sweep cannot fix -- a building identify lists
-    with no ward units (the harvester drops those by design), or a unit that
-    clusters knows about but identify never returns (seasonal wards with no
-    meetinghouse do this).
+    with no ward units (the harvester drops those by design), or a building
+    or unit that clusters knows about but identify never returns (seasonal
+    wards with no meetinghouse, and a few buildings, do this).
 
     Returns (real_missing_b, real_missing_u, probes).
     """
@@ -209,8 +212,9 @@ def explain(missing_b: list[str], missing_u: list[str], where: dict, cu: dict,
         res = fetch_nearest(*where[ident], limiter)
         hit = next((r for r in res if r.get("id") == ident), None)
         if hit is None:
-            print(f"   GAP      building {ident}: identify does not return it at its own coordinates")
-            real_b.append(ident)
+            # Same rule as for units: if identify won't return it right at its
+            # own coordinates, no sweep of identify could have found it.
+            print(f"   upstream building {ident}: identify never returns it at its own coordinates")
             continue
         wards = [a for a in hit.get("associated") or [] if (a.get("type") or "").startswith("WARD")]
         if wards:
