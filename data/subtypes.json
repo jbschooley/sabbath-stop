@@ -2,76 +2,86 @@
   {
     "code": "CONVENTIONAL",
     "label": "Conventional",
-    "count": 12844
+    "count": 28463
   },
   {
     "code": "SPANISH",
     "label": "Spanish",
-    "count": 926
+    "count": 939
   },
   {
     "code": "YSA",
     "label": "Young Single Adult",
-    "count": 776
+    "count": 806
   },
   {
     "code": "YSA_JR",
     "label": "Young Single Adult 18-25",
-    "count": 269
-  },
-  {
-    "code": "STUDENT_MARRIED",
-    "label": "Student Married",
-    "count": 116
+    "count": 273
   },
   {
     "code": "TONGAN",
     "label": "Tongan",
-    "count": 102
+    "count": 148
   },
   {
-    "code": "YSA_SR",
-    "label": "Young Single Adult 26-35",
-    "count": 93
+    "code": "STUDENT_MARRIED",
+    "label": "Student Married",
+    "count": 117
   },
   {
     "code": "SAMOAN",
     "label": "Samoan",
-    "count": 60
+    "count": 104
+  },
+  {
+    "code": "YSA_SR",
+    "label": "Young Single Adult 26-35",
+    "count": 94
+  },
+  {
+    "code": "ENGLISH",
+    "label": "English",
+    "count": 70
   },
   {
     "code": "SINGLE_ADULT",
     "label": "Single Adult",
-    "count": 45
+    "count": 46
   },
   {
     "code": "PORTUGUESE",
     "label": "Portuguese",
-    "count": 38
+    "count": 43
+  },
+  {
+    "code": "MILITARY",
+    "label": "Military",
+    "count": 33
   },
   {
     "code": "MANDARIN",
     "label": "Mandarin",
-    "count": 27
+    "count": 33
   },
   {
     "code": "FRENCH",
     "label": "French",
-    "count": 27
+    "count": 28
   },
   {
     "code": "DEAF",
     "label": "Sign Language",
+    "count": 21
+  },
+  {
+    "code": "TAGALOG",
+    "label": "Tagalog",
     "count": 20
   },
   {
     "code": "HAITIAN_CREOLE",
     "label": "Haitian Creole",
-    "count": 15
-  },
-  {
-    "code": "MILITARY",
-    "label": "Military",
     "count": 15
   },
   {
@@ -90,8 +100,8 @@
     "count": 10
   },
   {
-    "code": "TAGALOG",
-    "label": "Tagalog",
+    "code": "CHINESE",
+    "label": "Chinese",
     "count": 9
   },
   {
@@ -100,14 +110,14 @@
     "count": 9
   },
   {
-    "code": "CHINESE",
-    "label": "Chinese",
-    "count": 8
-  },
-  {
     "code": "TONGAN_YSA",
     "label": "Young Single Adult - Tongan",
     "count": 8
+  },
+  {
+    "code": "KOREAN",
+    "label": "Korean",
+    "count": 7
   },
   {
     "code": "SEASONAL",
@@ -115,19 +125,19 @@
     "count": 6
   },
   {
-    "code": "KOREAN",
-    "label": "Korean",
+    "code": "RUSSIAN",
+    "label": "Russian",
     "count": 6
+  },
+  {
+    "code": "VIETNAMESE",
+    "label": "Vietnamese",
+    "count": 5
   },
   {
     "code": "VISITOR",
     "label": "Visitor",
     "count": 5
-  },
-  {
-    "code": "VIETNAMESE",
-    "label": "Vietnamese",
-    "count": 3
   },
   {
     "code": "CAMBODIAN",
@@ -140,6 +150,11 @@
     "count": 3
   },
   {
+    "code": "TELUGU",
+    "label": "Telugu",
+    "count": 3
+  },
+  {
     "code": "FIJIAN",
     "label": "Fijian",
     "count": 3
@@ -147,11 +162,6 @@
   {
     "code": "NEPALI",
     "label": "Nepali",
-    "count": 3
-  },
-  {
-    "code": "RUSSIAN",
-    "label": "Russian",
     "count": 3
   },
   {
@@ -180,6 +190,11 @@
     "count": 2
   },
   {
+    "code": "CANTONESE",
+    "label": "Cantonese",
+    "count": 2
+  },
+  {
     "code": "KAREN",
     "label": "Karen",
     "count": 2
@@ -187,11 +202,6 @@
   {
     "code": "JAPANESE",
     "label": "Japanese",
-    "count": 2
-  },
-  {
-    "code": "ENGLISH",
-    "label": "English",
     "count": 2
   },
   {
@@ -205,13 +215,18 @@
     "count": 2
   },
   {
-    "code": "STUDENT_SINGLE",
-    "label": "Student Single",
+    "code": "MAORI",
+    "label": "M\u0101ori",
     "count": 1
   },
   {
-    "code": "CANTONESE",
-    "label": "Cantonese",
+    "code": "KIRIBATI",
+    "label": "Kiribati",
+    "count": 1
+  },
+  {
+    "code": "STUDENT_SINGLE",
+    "label": "Student Single",
     "count": 1
   },
   {
@@ -227,6 +242,21 @@
   {
     "code": "LAOTIAN",
     "label": "Laotian",
+    "count": 1
+  },
+  {
+    "code": "NIUEAN",
+    "label": "Niuean",
+    "count": 1
+  },
+  {
+    "code": "GERMAN",
+    "label": "German",
+    "count": 1
+  },
+  {
+    "code": "TAMIL",
+    "label": "Tamil",
     "count": 1
   },
   {
