@@ -81,14 +81,12 @@ export function fmtDateTime(date, tz) {
 }
 
 // Default departure as a value for <input type=datetime-local>: on a Sunday,
-// now rounded up to the next five minutes (you're probably already driving);
-// any other day, 8:00 AM next Sunday.
+// the current minute (you're probably already driving); any other day,
+// 8:00 AM next Sunday.
 export function defaultDepartureLocal(now = new Date()) {
   const d = new Date(now);
   if (d.getDay() === 0) {
     d.setSeconds(0, 0);
-    const extra = (5 - (d.getMinutes() % 5)) % 5;
-    d.setMinutes(d.getMinutes() + extra);
     return toDatetimeLocal(d);
   }
   d.setDate(d.getDate() + (7 - d.getDay()));
