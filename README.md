@@ -48,12 +48,15 @@ the design in [`APP_SPEC.md`](APP_SPEC.md).
 4. **Read the results.** Each one shows how many minutes the stop adds to
    your drive and how early or late you would arrive, in the building's own
    time zone. Sort by best fit, by slack before the meeting, or by distance
-   along the route. Hand the chosen stop off to Google or Apple Maps for
-   turn-by-turn.
+   along the route, or by which lets you leave latest. Each one also says
+   when to leave your start to arrive a few minutes before its meeting, and
+   one tap makes that your departure. Hand the chosen stop off to Google or
+   Apple Maps for turn-by-turn.
 
 Wards that match your unit type but not your timing show up greyed out. That
 is on purpose. Three wards that all start before you arrive is a reason to
-leave twenty minutes earlier, not a dead end.
+leave twenty minutes earlier, not a dead end, and each one says exactly when
+you would have had to leave.
 
 **It works offline once you have a plan.** Add it to your home screen and
 the app opens without a connection, showing the last plan you made. Move

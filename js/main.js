@@ -282,6 +282,7 @@ function syncFilterInputs() {
   $("show-flagged").checked = !!f.showFlagged;
   $("hide-misses").checked = f.hideMissesOnMap !== false;
   $("sort").value = f.sort;
+  $("aim").value = f.aimMin ?? 5;
   $("window-row").style.opacity = f.wide ? 0.5 : 1;
 }
 
@@ -299,13 +300,14 @@ function bindFilters() {
     f.showFlagged = $("show-flagged").checked;
     f.hideMissesOnMap = $("hide-misses").checked;
     f.sort = $("sort").value;
+    f.aimMin = clamp(parseInt($("aim").value, 10) || 0, 0, 120);
     $("window-row").style.opacity = f.wide ? 0.5 : 1;
     saveFilters();
     // Live re-apply without re-routing. Showing flagged units or raising max
     // detour can add candidates that were never timed; that needs a fresh search.
     if (state.candidates.length) render();
   };
-  for (const id of ["window-min", "window-max", "wide", "wide-hours", "show-flagged", "hide-misses", "sort", "max-detour"]) {
+  for (const id of ["window-min", "window-max", "wide", "wide-hours", "show-flagged", "hide-misses", "sort", "max-detour", "aim"]) {
     $(id).addEventListener("change", onChange);
   }
 }
@@ -855,6 +857,7 @@ async function go() {
     state.route = route;
     drawRoute(route);
     const zones = await renderRouteSummary(route);
+    route.zones = zones;
     setStatus("Finding wards…");
     const candidates = await findCandidates(route, state.filters, {
       loadTile,
@@ -903,6 +906,7 @@ async function showSavedPlan(mode) {
   try { departure = readDeparture(saved.zones[0]); } catch (e) { if (offline) setStatus(e.message, true); return false; }
   const plan = shiftPlan(saved, departure);
   clearResults();
+  plan.route.zones = plan.zones;
   state.route = plan.route;
   drawRoute(plan.route);
   await renderRouteSummary(plan.route, plan.zones);
@@ -1005,7 +1009,7 @@ function pinIcon(on, selected) {
 }
 
 function render() {
-  const list = reapply(state.candidates, state.filters);
+  const list = reapply(state.candidates, state.filters, state.route && state.route.departure);
   const fits = list.filter((c) => c.passes);
   const misses = list.filter((c) => !c.passes);
   $("summary").textContent = list.length
@@ -1080,7 +1084,7 @@ function select(id, fromList) {
 // Redraw pins without touching the list (used when a selection reveals or
 // hides a near miss).
 function renderMarkersOnly() {
-  const list = reapply(state.candidates, state.filters);
+  const list = reapply(state.candidates, state.filters, state.route && state.route.departure);
   clusterOn.clearLayers(); clusterOff.clearLayers(); state.markers.clear();
   const perBuilding = new Map();
   for (const c of list) {
@@ -1120,6 +1124,22 @@ function detourWords(c) {
   return { text: `+${m} min`, cls: m <= state.filters.maxDetourMin ? "good" : "bad" };
 }
 
+// "leave by 7:42 AM" in the start's zone, red when that is earlier than
+// the departure set above, since that is the change the reader has to make.
+function originTz() {
+  const r = state.route;
+  return (r && r.zones && r.zones[0]) || Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+function leaveWords(c) {
+  if (!c.leaveBy || !state.route) return null;
+  const tz = originTz(), localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const sameDay = wallClockValue(c.leaveBy, tz).slice(0, 10) === wallClockValue(state.route.departure, tz).slice(0, 10);
+  const when = sameDay ? fmtTime(c.leaveBy, tz) : fmtDateTime(c.leaveBy, tz);
+  const zone = tz !== localTz ? ` ${tzAbbrev(c.leaveBy, tz)}` : "";
+  const early = c.leaveBy.getTime() < state.route.departure.getTime();
+  return { text: `leave by ${c.leaveByApprox ? "~" : ""}${when}${zone}`, cls: early ? "bad" : "good" };
+}
+
 function flagWords(u) {
   const f = u.flags || [];
   const words = [];
@@ -1145,23 +1165,24 @@ function typeWords(c) {
 }
 
 function resultHtml(c) {
-  const d = deltaWords(c), t = detourWords(c);
+  const d = deltaWords(c), t = detourWords(c), l = leaveWords(c);
   return `
     <div class="name">${escapeHtml(c.unit.name)}</div>
     <div class="where">${escapeHtml([c.building.city, c.building.state].filter(Boolean).join(", "))} · ${escapeHtml(typeWords(c))} · ${escapeHtml(startWords(c))}</div>
-    <div class="numbers"><span class="num ${t.cls}">${t.text}</span><span class="num ${d.cls}">${d.text}</span><span class="num">${c.milesAlongRoute.toFixed(0)} mi in</span></div>
+    <div class="numbers"><span class="num ${t.cls}">${t.text}</span><span class="num ${d.cls}">${d.text}</span>${l ? `<span class="num ${l.cls}">${escapeHtml(l.text)}</span>` : ""}<span class="num">${c.milesAlongRoute.toFixed(0)} mi in</span></div>
     ${c.unit.flags?.length ? `<div class="flags">⚠ ${escapeHtml(flagWords(c.unit))}</div>` : ""}
     <div class="links">${linksHtml(c)}</div>`;
 }
 
 function popupHtml(c) {
-  const d = deltaWords(c), t = detourWords(c);
+  const d = deltaWords(c), t = detourWords(c), l = leaveWords(c);
   return `
     <div class="name">${escapeHtml(c.unit.name)}</div>
     <div>${escapeHtml(typeWords(c))} · ${escapeHtml(startWords(c))}</div>
     <div>${escapeHtml(c.building.addr || "")}</div>
     <div><b class="num ${t.cls}">${t.text}</b> added · <b class="num ${d.cls}">${d.text}</b></div>
     <div>Arrive ${escapeHtml(fmtDateTime(c.arrivalAtBuilding, c.building.tz))} ${escapeHtml(tzAbbrev(c.arrivalAtBuilding, c.building.tz))}</div>
+    ${l ? `<div><b class="num ${l.cls}">${escapeHtml(l.text.replace(/^leave by /, "Leave by "))}</b> to arrive ${state.filters.aimMin || 0} min before the start</div>` : ""}
     ${c.unit.flags?.length ? `<div class="flags">⚠ ${escapeHtml(flagWords(c.unit))}</div>` : ""}
     <div class="links" style="margin-top:6px">${linksHtml(c)}</div>`;
 }
@@ -1176,7 +1197,9 @@ function linksHtml(c) {
   const google = `https://www.google.com/maps/dir/?api=1&origin=${ll(o)}&destination=${ll(dst)}&waypoints=${encodeURIComponent(vias.map(ll).join("|"))}&travelmode=driving`;
   const apple1 = `https://maps.apple.com/?saddr=${ll(o)}&daddr=${ll(b)}&dirflg=d`;
   const apple2 = `https://maps.apple.com/?saddr=${ll(b)}&daddr=${ll(dst)}&dirflg=d`;
+  const l = c.leaveBy ? `<a href="#" data-leave="${c.leaveBy.getTime()}">Set departure to ${escapeHtml(fmtTime(c.leaveBy, originTz()))}</a>` : "";
   return [
+    l,
     b.url ? `<a href="${escapeAttr(b.url)}" target="_blank" rel="noopener">Official locator page</a>` : "",
     `<a href="${escapeAttr(google)}" target="_blank" rel="noopener">Google Maps (whole trip)</a>`,
     `<a href="${escapeAttr(apple1)}" target="_blank" rel="noopener">Apple Maps to ward</a>`,
@@ -1328,6 +1351,18 @@ async function boot() {
   for (const ev of ["gesturestart", "gesturechange", "gestureend"]) panel.addEventListener(ev, (e) => e.preventDefault());
   panel.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   $("go").addEventListener("click", go);
+  // "Set departure to 7:42 AM" links, in the list or a map popup: write that
+  // time into the picker in the start's zone and plan again. Online that
+  // re-routes; offline it shifts the saved plan.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a[data-leave]");
+    if (!a) return;
+    e.preventDefault();
+    $("departure").value = wallClockValue(new Date(+a.dataset.leave), originTz());
+    saveDeparture($("departure").value);
+    updateConferenceNote();
+    go();
+  });
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "text") go(); });
   // Offline: the shell and the last plan come from the service worker and
   // localStorage; the banner says what still works.

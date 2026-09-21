@@ -17,10 +17,10 @@
   <link rel="icon" href="brand/exit-sign.svg" type="image/svg+xml">
   <link rel="icon" href="brand/icon-32.png" sizes="32x32" type="image/png">
   <!-- iOS home-screen icons: solid background, since iOS paints transparency black -->
-  <link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon-180.png?v=2026092051">
-  <link rel="apple-touch-icon" sizes="167x167" href="brand/apple-touch-icon-167.png?v=2026092051">
-  <link rel="apple-touch-icon" sizes="152x152" href="brand/apple-touch-icon-152.png?v=2026092051">
-  <link rel="apple-touch-icon" sizes="120x120" href="brand/apple-touch-icon-120.png?v=2026092051">
+  <link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon-180.png?v=2026092053">
+  <link rel="apple-touch-icon" sizes="167x167" href="brand/apple-touch-icon-167.png?v=2026092053">
+  <link rel="apple-touch-icon" sizes="152x152" href="brand/apple-touch-icon-152.png?v=2026092053">
+  <link rel="apple-touch-icon" sizes="120x120" href="brand/apple-touch-icon-120.png?v=2026092053">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Sabbath Stop">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/app.css?v=2026092051">
+  <link rel="stylesheet" href="css/app.css?v=2026092053">
   <!-- Cache busting without a build step. GitHub Pages serves everything with
        max-age=600, so a device that opened the app minutes before a deploy keeps
        running the old scripts. Bump the version on every deploy; the import
@@ -36,15 +36,15 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/abrp.js":      "./js/abrp.js?v=2026092051",
-      "./js/finder.js":    "./js/finder.js?v=2026092051",
-      "./js/geo.js":       "./js/geo.js?v=2026092051",
-      "./js/geocode.js":   "./js/geocode.js?v=2026092051",
-      "./js/plan.js":      "./js/plan.js?v=2026092051",
-      "./js/providers.js": "./js/providers.js?v=2026092051",
-      "./js/routing.js":   "./js/routing.js?v=2026092051",
-      "./js/share.js":     "./js/share.js?v=2026092051",
-      "./js/tz.js":        "./js/tz.js?v=2026092051"
+      "./js/abrp.js":      "./js/abrp.js?v=2026092053",
+      "./js/finder.js":    "./js/finder.js?v=2026092053",
+      "./js/geo.js":       "./js/geo.js?v=2026092053",
+      "./js/geocode.js":   "./js/geocode.js?v=2026092053",
+      "./js/plan.js":      "./js/plan.js?v=2026092053",
+      "./js/providers.js": "./js/providers.js?v=2026092053",
+      "./js/routing.js":   "./js/routing.js?v=2026092053",
+      "./js/share.js":     "./js/share.js?v=2026092053",
+      "./js/tz.js":        "./js/tz.js?v=2026092053"
     }
   }
   </script>
@@ -143,6 +143,7 @@
             <option value="arrival">Arrival before start</option>
             <option value="earliest">Earliest meeting first</option>
             <option value="distance">Distance along route</option>
+            <option value="leave">Latest departure first</option>
           </select>
         </div>
       </div>
@@ -150,6 +151,10 @@
         <div class="field"><label for="window-min">Arrive from (min vs start)</label><input id="window-min" type="number" min="-180" max="60" step="1"></div>
         <div class="field"><label for="window-max">to</label><input id="window-max" type="number" min="-180" max="60" step="1"></div>
       </div>
+      <div class="row">
+        <div class="field"><label for="aim">Aim to arrive (min before start)</label><input id="aim" type="number" min="0" max="120" step="1"></div>
+      </div>
+      <p class="hint info">Each result says when to leave your start to arrive this many minutes before its meeting begins, and offers to set that as your departure. Sacrament itself usually starts ten to fifteen minutes after the meeting does, so a few minutes is enough. Near misses show it too: that is how much earlier you would have to leave.</p>
       <label class="toggle"><input id="wide" type="checkbox"> Wide mode: anything starting within
         <input id="wide-hours" type="number" min="0.5" max="6" step="0.5"> h of arrival (EV / long stops)</label>
       <label class="toggle"><input id="show-flagged" type="checkbox"> Show units with data problems (missing or implausible times, restricted access)</label>
@@ -181,6 +186,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script type="module" src="js/main.js?v=2026092051"></script>
+<script type="module" src="js/main.js?v=2026092053"></script>
 </body>
 </html>

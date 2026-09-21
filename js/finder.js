@@ -34,6 +34,7 @@ export const BATCH_SPAN_MI = 60; // keeps every pair inside Valhalla's 150 km ma
 export const DEFAULT_FILTERS = {
   subtypes: [],          // codes; empty = nothing selected -> prompt the user
   langs: [],             // language codes; empty = any language
+  aimMin: 5,             // "leave by" targets arriving this many minutes before the start
   maxDetourMin: 30,
   windowMin: -60,        // minutes relative to start; negative = early
   windowMax: 10,
@@ -86,6 +87,15 @@ export function sortCandidates(list, mode) {
     });
   } else if (mode === "distance") {
     arr.sort((a, b) => a.milesAlongRoute - b.milesAlongRoute);
+  } else if (mode === "leave") {
+    // Latest departure first: the ward that lets you leave last, whether it
+    // is early and near or late and far. Unknown last.
+    arr.sort((a, b) => {
+      const la = a.leaveBy ? a.leaveBy.getTime() : -Infinity;
+      const lb = b.leaveBy ? b.leaveBy.getTime() : -Infinity;
+      if (la !== lb) return lb - la;
+      return (a.detourMinutes ?? 0) - (b.detourMinutes ?? 0);
+    });
   } else {
     arr.sort((a, b) => a.score - b.score);
   }
@@ -308,12 +318,27 @@ export async function findCandidates(route, filters, deps) {
   return sortCandidates(prelim, filters.sort);
 }
 
+// When to leave the start so as to reach this ward `aimMin` minutes before
+// its meeting starts. Every arrival in a plan is the departure plus a fixed
+// travel time, so this is a subtraction: no routing, and it works offline.
+// Null when the unit has no start or no meeting that day. For a candidate
+// that was never detour-timed the nearest-point time stands in, so the
+// answer is approximate (c.leaveByApprox).
+export function leaveBy(c, departure, aimMin = 0) {
+  if (!c.startInstant || !departure) return null;
+  const arrival = c.routed ? c.arrivalAtBuilding : c.etaAtNearestPoint;
+  if (!arrival) return null;
+  return new Date(departure.getTime() + (c.startInstant.getTime() - arrival.getTime()) - aimMin * 60000);
+}
+
 // Re-apply filters that don't need any routing (window, sort, restricted).
-export function reapply(candidates, filters) {
+export function reapply(candidates, filters, departure = null) {
   for (const c of candidates) {
     c.hidden = !filters.showFlagged && !!c.unit.flags?.length;
     c.passes = c.routed && c.detourMinutes <= filters.maxDetourMin && inWindow(c.deltaMinutes, filters);
     c.score = score(c);
+    c.leaveBy = leaveBy(c, departure, filters.aimMin || 0);
+    c.leaveByApprox = !c.routed;
   }
   return sortCandidates(candidates.filter((c) => !c.hidden), filters.sort);
 }

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexBuckets } from "./js/geo.js";
 import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal, weekdayIn, wallClockValue, instantFromWallClock, tzAbbrev, generalConferenceDays, isGeneralConference } from "./js/tz.js";
-import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS } from "./js/finder.js";
+import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS, leaveBy, reapply } from "./js/finder.js";
 import { dwellBefore, applyDwell } from "./js/routing.js";
 import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
 import { deflateRawSync } from "node:zlib";
@@ -273,6 +273,40 @@ await atest("findCandidates: matrix pipeline times only promising candidates", a
   assert.ok(Math.abs(mid.deltaMinutes - (leg - 15)) < 0.05, String(mid.deltaMinutes));
   assert.equal(out[0].unit.id, "u1", "best fit sorts first");
   assert.equal(out.find((c) => c.unit.id === "u4").passes, false);
+});
+
+test("leaveBy: departure that lands aimMin before the start, using the routed arrival", () => {
+  const departure = new Date("2026-09-27T14:00:00Z");
+  const c = {
+    routed: true, etaAtNearestPoint: new Date("2026-09-27T14:30:00Z"), arrivalAtBuilding: new Date("2026-09-27T14:34:00Z"),
+    startInstant: new Date("2026-09-27T14:45:00Z"),
+  };
+  const lb = leaveBy(c, departure, 5);
+  // travel is 34 min; start 08:45 MDT; aim 08:40 -> leave 08:06 MDT = 14:06Z
+  assert.equal(lb.toISOString(), "2026-09-27T14:06:00.000Z");
+  assert.equal(new Date(lb.getTime() + 34 * 60000 + 5 * 60000).getTime(), c.startInstant.getTime(), "leave + travel + aim = start");
+  // unrouted: the nearest-point time stands in
+  assert.equal(leaveBy({ ...c, routed: false }, departure, 0).toISOString(), "2026-09-27T14:15:00.000Z");
+  assert.equal(leaveBy({ ...c, startInstant: null }, departure, 5), null);
+  assert.equal(leaveBy(c, null, 5), null);
+});
+
+test("reapply fills leaveBy and the 'leave' sort puts the latest departure first", () => {
+  const departure = new Date("2026-09-27T14:00:00Z");
+  const mk = (id, travelMin, startZ, routed = true) => ({
+    unit: { id, name: id }, routed, detourMinutes: 3, deltaMinutes: -5, offRouteMiles: 1, milesAlongRoute: 10,
+    etaAtNearestPoint: new Date(departure.getTime() + travelMin * 60000), arrivalAtBuilding: new Date(departure.getTime() + travelMin * 60000),
+    startInstant: new Date(startZ),
+  });
+  const near = mk("near", 30, "2026-09-27T15:00:00Z");   // 09:00, 30 min away -> leave 08:25
+  const far = mk("far", 120, "2026-09-27T17:00:00Z");    // 11:00, 2 h away    -> leave 08:55
+  const none = { ...mk("none", 10, "2026-09-27T15:00:00Z"), startInstant: null };
+  const filters = { ...DEFAULT_FILTERS, sort: "leave", aimMin: 5, maxDetourMin: 30, windowMin: -60, windowMax: 10 };
+  const out = reapply([near, none, far], filters, departure);
+  assert.deepEqual(out.map((c) => c.unit.id), ["far", "near", "none"]);
+  assert.equal(far.leaveBy.toISOString(), "2026-09-27T14:55:00.000Z");
+  assert.equal(near.leaveByApprox, false);
+  assert.equal(none.leaveBy, null);
 });
 
 await atest("findCandidates: the language filter is independent of the unit type", async () => {
