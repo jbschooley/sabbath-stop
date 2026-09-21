@@ -318,15 +318,39 @@ function addWaypointRow(prefill, text, dwellMin) {
   row.innerHTML = `<label>Via</label><div class="row tight">
       <input type="text" placeholder="Optional stop" autocomplete="off">
       <input type="number" class="dwell" min="0" max="600" step="5" placeholder="0" inputmode="numeric" title="Minutes at this stop" aria-label="Minutes at this stop"><span class="unit">min</span>
-      <button class="btn icon" title="Remove" aria-label="Remove stop">×</button>
+      <button class="btn icon move" data-dir="-1" title="Move up" aria-label="Move stop up">↑</button>
+      <button class="btn icon move" data-dir="1" title="Move down" aria-label="Move stop down">↓</button>
+      <button class="btn icon remove" title="Remove" aria-label="Remove stop">×</button>
     </div><ul hidden></ul>`;
   const input = row.querySelector("input[type=text]"), list = row.querySelector("ul"), dwell = row.querySelector("input.dwell");
   input.value = text ?? (prefill ? prefill.name : "");
   if (dwellMin) dwell.value = dwellMin;
   attachSuggest(input, list, (p) => { state.places.waypoints[idx] = p; });
   dwell.addEventListener("change", () => { state.places.dwellMin[idx] = Math.max(0, parseFloat(dwell.value) || 0); saveRouteInput(); });
-  row.querySelector("button").addEventListener("click", () => { state.places.waypoints[idx] = undefined; state.planLegSeconds = null; row.remove(); saveRouteInput(); });
+  row.querySelector("button.remove").addEventListener("click", () => { state.places.waypoints[idx] = undefined; state.planLegSeconds = null; row.remove(); refreshMoveButtons(); saveRouteInput(); });
+  // Route order is the rows' DOM order, so moving a row is the whole change.
+  for (const btn of row.querySelectorAll("button.move")) {
+    btn.addEventListener("click", () => {
+      const dir = Number(btn.dataset.dir);
+      const sibling = dir < 0 ? row.previousElementSibling : row.nextElementSibling;
+      if (!sibling) return;
+      if (dir < 0) wrap.insertBefore(row, sibling); else wrap.insertBefore(sibling, row);
+      state.planLegSeconds = null;
+      refreshMoveButtons();
+      saveRouteInput();
+    });
+  }
   wrap.appendChild(row);
+  refreshMoveButtons();
+}
+
+// First stop can't move up, last can't move down.
+function refreshMoveButtons() {
+  const rows = [...document.querySelectorAll("#waypoints .field")];
+  rows.forEach((row, i) => {
+    row.querySelector('button.move[data-dir="-1"]').disabled = i === 0;
+    row.querySelector('button.move[data-dir="1"]').disabled = i === rows.length - 1;
+  });
 }
 
 async function useMyLocation() {
