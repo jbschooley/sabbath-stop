@@ -1,0 +1,16 @@
+;; sabbathstop.com — GitHub Pages
+;; Import in Cloudflare: DNS > Records > Import and Export > Import DNS records.
+;; Leave the records DNS-only (grey cloud) until GitHub has issued the
+;; certificate; the proxy hides the apex from GitHub's validation.
+$ORIGIN sabbathstop.com.
+$TTL 3600
+
+@	3600	IN	A	185.199.108.153
+@	3600	IN	A	185.199.109.153
+@	3600	IN	A	185.199.110.153
+@	3600	IN	A	185.199.111.153
+@	3600	IN	AAAA	2606:50c0:8000::153
+@	3600	IN	AAAA	2606:50c0:8001::153
+@	3600	IN	AAAA	2606:50c0:8002::153
+@	3600	IN	AAAA	2606:50c0:8003::153
+www	3600	IN	CNAME	jbschooley.github.io.
