@@ -275,6 +275,19 @@ await atest("findCandidates: matrix pipeline times only promising candidates", a
   assert.equal(out.find((c) => c.unit.id === "u4").passes, false);
 });
 
+await atest("findCandidates: the language filter is independent of the unit type", async () => {
+  const { route, tile, filters } = fixture();
+  tile[0].units[0].lang = "nv"; // a YSA unit meeting in Navajo
+  tile[3].units[0].lang = "en";
+  const deps = { loadTile: async (key) => (key === "w112_n40" ? tile : null), matrix: fakeMatrix, concurrency: 1 };
+  const any = await findCandidates(route, filters, deps);
+  assert.ok(any.some((c) => c.unit.id === "u1") && any.some((c) => c.unit.id === "u4"), "empty = any language");
+  const navajo = await findCandidates(route, { ...filters, langs: ["nv"] }, deps);
+  assert.deepEqual(navajo.map((c) => c.unit.id), ["u1"]);
+  const english = await findCandidates(route, { ...filters, langs: ["en", "es"] }, deps);
+  assert.deepEqual(english.map((c) => c.unit.id), ["u4"]);
+});
+
 await atest("findCandidates: arriving on a day the unit doesn't meet is not a fit", async () => {
   const { route, tile, filters } = fixture();
   route.departure = new Date("2026-09-23T14:00:00Z"); // a Wednesday
@@ -638,7 +651,7 @@ test("share links round-trip a plan, including non-ASCII names, and drop empties
   const plan = {
     departure: "2026-09-27T08:00",
     route: { originText: "München, Bayern", origin: { name: "München", lng: 11.575, lat: 48.137 }, destinationText: "", waypoints: [{ text: "Tesla Supercharger Beaver, UT", dwellMin: "15" }] },
-    filters: { subtypes: ["YSA", "YSA_JR"], maxDetourMin: 30, wide: false, sort: "best" },
+    filters: { subtypes: ["YSA", "YSA_JR"], langs: ["es"], maxDetourMin: 30, wide: false, sort: "best" },
   };
   const url = shareUrl("https://sabbathstop.com/", plan);
   assert.ok(url.startsWith("https://sabbathstop.com/#s="));
@@ -649,6 +662,7 @@ test("share links round-trip a plan, including non-ASCII names, and drop empties
   assert.equal(back.route.origin.lng, 11.575);
   assert.equal(back.route.waypoints[0].dwellMin, "15");
   assert.deepEqual(back.filters.subtypes, ["YSA", "YSA_JR"]);
+  assert.deepEqual(back.filters.langs, ["es"]);
   assert.equal("destinationText" in back.route, false, "empty strings are dropped");
   assert.equal("wide" in back.filters, false, "false is dropped and comes back as the default");
 });

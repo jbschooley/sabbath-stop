@@ -271,6 +271,7 @@ def normalize(raw: dict) -> dict | None:
                 "end": finish,
                 "day": day or "SUNDAY",
                 "lang": (w.get("language") or {}).get("code"),
+                "langName": (w.get("language") or {}).get("display"),
             }
         )
 

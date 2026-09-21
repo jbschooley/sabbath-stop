@@ -173,6 +173,7 @@ same `locations/clusters?extent=` route with no auth at all — which is where
 ```
 data/manifest.json           tile index, counts, bbox, build timestamp
 data/subtypes.json           every subType seen, with labels and counts
+data/languages.json          every meeting language seen, with labels and counts
 data/tiles/w112_n40.json     one 1° tile
 ```
 
@@ -209,6 +210,15 @@ The long tail includes `SPANISH_YSA`, `MANDARIN`, `MARSHALLESE`,
 national harvest will turn up others — `data/subtypes.json` is generated from
 whatever the harvest actually found, so the filter UI should build itself from
 that file rather than a hardcoded list.
+
+## Languages
+
+`lang` is the locator's language code for the meeting (`en`, `es`, `pt`,
+`fr`, `tl`, `to`, `ceb`, `sm`, … 118 codes worldwide) and is independent of
+`subType`: a `CONVENTIONAL` unit can meet in Navajo, and a `SPANISH` unit is
+simply `es`. The harvester also records the locator's display name, which
+`build_tiles.py` moves out of the tiles into `data/languages.json` so the
+filter UI can label the codes without a hardcoded table.
 
 **Associated unit `type` is `WARD__<SUBTYPE>`, not `WARD`**, for every
 non-conventional unit. An exact `== "WARD"` comparison silently drops ~17% of

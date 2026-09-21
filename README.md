@@ -42,7 +42,9 @@ the design in [`APP_SPEC.md`](APP_SPEC.md).
    Sunday morning. Check it.
 3. **Pick the unit types you want.** Conventional, YSA, Spanish, and so on.
    Nothing is selected by default, because an unfiltered list of every ward
-   in the country is not useful.
+   in the country is not useful. A separate language filter narrows to
+   meetings held in a given language, which matters once you are outside
+   the country whose language you speak.
 4. **Read the results.** Each one shows how many minutes the stop adds to
    your drive and how early or late you would arrive, in the building's own
    time zone. Sort by best fit, by slack before the meeting, or by distance
@@ -84,7 +86,8 @@ python3 verify.py  --only utah-test     # independent cross-check
 python3 build_tiles.py --min-buildings 2000
 ```
 
-Output lands in `data/` as a manifest, a catalogue of unit subtypes, and one
+Output lands in `data/` as a manifest, catalogues of unit subtypes and
+meeting languages, and one
 JSON tile per degree of latitude and longitude. The app fetches only the
 tiles your route touches.
 

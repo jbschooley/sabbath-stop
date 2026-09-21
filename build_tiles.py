@@ -6,6 +6,7 @@ Output layout (all under --out, default: data/):
 
     data/manifest.json          index: tile list, counts, bbox, build time
     data/subtypes.json          catalog of every unit subType seen, with counts
+    data/languages.json         catalog of every meeting language seen, with counts
     data/tiles/<lng>_<lat>.json one 1-degree tile, only where units exist
 
 The app computes its route's bounding box, buffers it by the user's maximum
@@ -112,6 +113,8 @@ def main() -> int:
     flags: Counter = Counter()
     subtypes: Counter = Counter()
     subtype_labels: dict[str, str] = {}
+    languages: Counter = Counter()
+    language_labels: dict[str, str] = {}
     missing_start = 0
     missing_tz = 0
     n_units = 0
@@ -131,6 +134,12 @@ def main() -> int:
             n_units += 1
             subtypes[u["subType"]] += 1
             subtype_labels[u["subType"]] = u["subTypeDisplay"]
+            if u.get("lang"):
+                languages[u["lang"]] += 1
+                if u.get("langName"):
+                    language_labels[u["lang"]] = u["langName"]
+            # The name lives in the catalog; the tile keeps only the code.
+            u.pop("langName", None)
             if not u.get("start"):
                 missing_start += 1
 
@@ -197,10 +206,19 @@ def main() -> int:
     with open(os.path.join(args.out, "subtypes.json"), "w") as f:
         json.dump(catalog, f, indent=2)
 
+    # Older harvests carry no display names; the app then names the code itself.
+    langs = [
+        {"code": code, "label": language_labels.get(code, code), "count": n}
+        for code, n in languages.most_common()
+    ]
+    with open(os.path.join(args.out, "languages.json"), "w") as f:
+        json.dump(langs, f, indent=2, ensure_ascii=False)
+
     print(f"buildings      {len(buildings):>8,}")
     print(f"units          {n_units:>8,}")
     print(f"tiles          {len(tile_index):>8,}")
     print(f"subtypes       {len(catalog):>8,}")
+    print(f"languages      {len(langs):>8,}")
     print(f"no start time  {missing_start:>8,}  ({missing_start/max(n_units,1)*100:.2f}%)")
     print(f"no timezone    {missing_tz:>8,}")
     print(f"total tile KB  {total_bytes/1024:>8,.0f}")

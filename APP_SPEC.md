@@ -161,6 +161,7 @@ All persisted to `localStorage`, all live-reapplied without re-routing.
 | Filter | Type | Example |
 |---|---|---|
 | Unit subtypes | multi-select, built from `data/subtypes.json` | `YSA`, `YSA_JR`, `YSA_SR` |
+| Language | multi-select, built from `data/languages.json`; empty = any | `es`, `pt` |
 | Max detour | minutes | `≤ 10 min` |
 | Arrival window | range, relative to meeting start | `-15 min` to `+2 min` |
 | Wide mode | single "starts within N of arrival" | `within 2 h` |

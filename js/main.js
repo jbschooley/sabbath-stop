@@ -16,6 +16,7 @@ const FILTERS_KEY = "ss:filters:v2"; // bumped when defaults change so they take
 const DEPART_KEY = "ss:departure";
 const ROUTE_INPUT_KEY = "ss:route-input";
 const TOP_SUBTYPES = ["CONVENTIONAL", "YSA", "YSA_JR", "YSA_SR", "SPANISH", "STUDENT_MARRIED"];
+const TOP_LANGS = 4; // the most common languages get chips; the rest fold away
 const MAX_MISSES_LISTED = 40;
 
 const state = {
@@ -26,6 +27,7 @@ const state = {
   planLegs: null,        // per-leg ABRP times for the route being searched, else null
   manifest: null,
   subtypes: [],
+  languages: [],
   tileCache: new Map(),
   markers: new Map(),
 };
@@ -188,6 +190,57 @@ async function loadDataset() {
     state.subtypes = [];
   }
   renderSubtypes();
+  // The language catalog arrived a build later than the rest; a dataset
+  // without it just hides the section.
+  try { state.languages = await fetch("data/languages.json").then((r) => (r.ok ? r.json() : [])); }
+  catch { state.languages = []; }
+  renderLanguages();
+}
+
+// ---------------------------------------------------------------- languages
+
+// The catalog's label, or the browser's own name for the code when the
+// catalog only has the code (older builds), or the code itself.
+let displayNames = null;
+function langLabel(code, fromCatalog) {
+  if (fromCatalog && fromCatalog !== code) return fromCatalog;
+  try {
+    displayNames = displayNames || new Intl.DisplayNames(["en"], { type: "language", fallback: "none" });
+    return displayNames.of(code) || code;
+  } catch { return code; }
+}
+function langName(code) {
+  const entry = state.languages.find((l) => l.code === code);
+  return langLabel(code, entry && entry.label);
+}
+
+function renderLanguages() {
+  const top = $("langs"), more = $("langs-more");
+  top.innerHTML = ""; more.innerHTML = "";
+  $("lang-section").hidden = !state.languages.length;
+  if (!state.languages.length) return;
+  const selected = new Set(state.filters.langs || []);
+  state.languages.forEach((l, i) => {
+    const chip = document.createElement("label");
+    chip.className = "chip" + (selected.has(l.code) ? " on" : "");
+    chip.innerHTML = `<input type="checkbox" value="${escapeAttr(l.code)}" ${selected.has(l.code) ? "checked" : ""}> ${escapeHtml(langLabel(l.code, l.label))} <span class="n">${l.count}</span>`;
+    chip.querySelector("input").addEventListener("change", (e) => {
+      const set = new Set(state.filters.langs || []);
+      e.target.checked ? set.add(l.code) : set.delete(l.code);
+      state.filters.langs = [...set];
+      chip.classList.toggle("on", e.target.checked);
+      saveFilters();
+      updateLangHint();
+    });
+    (i < TOP_LANGS || selected.has(l.code) ? top : more).appendChild(chip);
+  });
+  updateLangHint();
+}
+function updateLangHint() {
+  const set = state.filters.langs || [];
+  $("lang-hint").textContent = set.length
+    ? `Only meetings held in ${set.map(langName).join(", ")}. Press Find wards to apply.`
+    : "Any language. Tick one or more to narrow the results.";
 }
 
 // ---------------------------------------------------------------- subtypes
@@ -1082,11 +1135,20 @@ function startWords(c) {
   return `Sacrament ${fmtHHMM(c.unit.start, c.building.tz, c.etaAtNearestPoint)}`;
 }
 
+// The unit type and, when it says something the type doesn't, the language:
+// "Conventional · Navajo", but not "Spanish · Spanish" or "Conventional · English".
+function typeWords(c) {
+  const lang = c.unit.lang;
+  if (!lang || lang === "en") return c.unit.subTypeDisplay;
+  const name = langName(lang);
+  return (c.unit.subTypeDisplay || "").toLowerCase().includes(name.toLowerCase()) ? c.unit.subTypeDisplay : `${c.unit.subTypeDisplay} · ${name}`;
+}
+
 function resultHtml(c) {
   const d = deltaWords(c), t = detourWords(c);
   return `
     <div class="name">${escapeHtml(c.unit.name)}</div>
-    <div class="where">${escapeHtml([c.building.city, c.building.state].filter(Boolean).join(", "))} · ${escapeHtml(c.unit.subTypeDisplay)} · ${escapeHtml(startWords(c))}</div>
+    <div class="where">${escapeHtml([c.building.city, c.building.state].filter(Boolean).join(", "))} · ${escapeHtml(typeWords(c))} · ${escapeHtml(startWords(c))}</div>
     <div class="numbers"><span class="num ${t.cls}">${t.text}</span><span class="num ${d.cls}">${d.text}</span><span class="num">${c.milesAlongRoute.toFixed(0)} mi in</span></div>
     ${c.unit.flags?.length ? `<div class="flags">⚠ ${escapeHtml(flagWords(c.unit))}</div>` : ""}
     <div class="links">${linksHtml(c)}</div>`;
@@ -1096,7 +1158,7 @@ function popupHtml(c) {
   const d = deltaWords(c), t = detourWords(c);
   return `
     <div class="name">${escapeHtml(c.unit.name)}</div>
-    <div>${escapeHtml(c.unit.subTypeDisplay)} · ${escapeHtml(startWords(c))}</div>
+    <div>${escapeHtml(typeWords(c))} · ${escapeHtml(startWords(c))}</div>
     <div>${escapeHtml(c.building.addr || "")}</div>
     <div><b class="num ${t.cls}">${t.text}</b> added · <b class="num ${d.cls}">${d.text}</b></div>
     <div>Arrive ${escapeHtml(fmtDateTime(c.arrivalAtBuilding, c.building.tz))} ${escapeHtml(tzAbbrev(c.arrivalAtBuilding, c.building.tz))}</div>
@@ -1256,6 +1318,7 @@ async function boot() {
     if (!applySharedPlan()) return;
     syncFilterInputs();
     renderSubtypes();
+    renderLanguages();
     updateDepartureZoneNote();
     go();
   });

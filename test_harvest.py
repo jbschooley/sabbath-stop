@@ -73,7 +73,7 @@ RAW = {
             "typeDisplay": "Ward / Branch",
             "hours": {"primary": {"hour": {"code": "09:00:00"}},
                       "days": [{"hours": {"ranges": [{"finish": {"code": "11:00:00"}}]}}]},
-            "language": {"code": "en"},
+            "language": {"code": "en", "display": "English"},
         },
         {   # YSA: type is "WARD__YSA", NOT "WARD"
             "id": "81086", "type": "WARD__YSA", "subType": "YSA",
@@ -89,7 +89,7 @@ RAW = {
             "nameDisplay": "Animas Branch",
             "typeDisplay": "Spanish Ward / Branch",
             "hours": {"primary": {"hour": {"code": "12:30:00"}}},
-            "language": {"code": "es"},
+            "language": {"code": "es", "display": "Spanish"},
         },
         {   # not a ward at all -- must be excluded
             "id": "77777", "type": "STAKE", "nameDisplay": "Some Stake",
@@ -127,6 +127,11 @@ def test_normalize() -> None:
     check("start truncated to HH:MM", by_id["81086"]["start"] == "10:30")
     check("end truncated to HH:MM", by_id["81086"]["end"] == "12:30")
     check("missing end tolerated", by_id["99999"]["end"] is None)
+    # Language is independent of subType: the code drives the filter and the
+    # display name feeds data/languages.json.
+    check("language code kept", by_id["99999"]["lang"] == "es")
+    check("language name kept", by_id["99999"]["langName"] == "Spanish")
+    check("missing language name tolerated", by_id["81086"]["langName"] is None)
 
     # Meeting day: taken from the API when present, SUNDAY when it is not.
     # A few units worldwide meet on Friday or Saturday.

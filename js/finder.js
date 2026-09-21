@@ -33,6 +33,7 @@ export const BATCH_SPAN_MI = 60; // keeps every pair inside Valhalla's 150 km ma
 
 export const DEFAULT_FILTERS = {
   subtypes: [],          // codes; empty = nothing selected -> prompt the user
+  langs: [],             // language codes; empty = any language
   maxDetourMin: 30,
   windowMin: -60,        // minutes relative to start; negative = early
   windowMax: 10,
@@ -132,6 +133,7 @@ export async function findCandidates(route, filters, deps) {
   const maxDetourBuildings = deps.maxDetourBuildings ?? 400;
   const concurrency = deps.concurrency ?? 2;
   const selected = new Set(filters.subtypes);
+  const langs = new Set(filters.langs || []);
   const radiusMi = detourRadiusMiles(filters.maxDetourMin);
 
   // 1. tiles
@@ -140,11 +142,12 @@ export async function findCandidates(route, filters, deps) {
   const tiles = await Promise.all(keys.map((k) => loadTile(k)));
   const buildings = tiles.flat().filter(Boolean);
 
-  // 2 + 3. subtype, then proximity
+  // 2 + 3. subtype and language, then proximity. Language is its own field:
+  // a CONVENTIONAL unit can meet in Navajo, and a SPANISH one is "es".
   const buckets = new VertexBuckets(route.points);
   const rough = [];
   for (const b of buildings) {
-    const units = b.units.filter((u) => selected.has(u.subType));
+    const units = b.units.filter((u) => selected.has(u.subType) && (!langs.size || langs.has(u.lang)));
     if (!units.length) continue;
     const near = buckets.nearest(b.lng, b.lat, radiusMi);
     if (near.index < 0) continue;
