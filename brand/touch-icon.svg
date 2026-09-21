@@ -2,7 +2,7 @@
   <!-- Home-screen variant: full-bleed green, border concentric with the iOS corner mask -->
   <!-- Highway exit panel: green board, white inset border, meetinghouse, arrowhead -->
   <rect x="0" y="0" width="512" height="512" fill="#1f7a4d"/>
-  <rect x="58" y="58" width="396" height="396" rx="56" fill="none" stroke="#ffffff" stroke-width="14"/>
+  <rect x="58" y="58" width="396" height="396" rx="96" fill="none" stroke="#ffffff" stroke-width="14"/>
   <!-- Meetinghouse, centred vertically on the panel (y 132..380) -->
   <g fill="#ffffff" transform="translate(3,0)">
     <!-- spire -->
