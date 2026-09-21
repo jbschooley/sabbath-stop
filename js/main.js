@@ -2,11 +2,10 @@
 // modules that know nothing about the DOM.
 
 import { DEFAULT_FILTERS, findCandidates, reapply } from "./finder.js";
-import { debounce, geocodeOne, reverse, suggest } from "./geocode.js";
+import { debounce, geocodeOne, pickByAddress, reverse, suggest } from "./geocode.js";
 import { isUnresolvableName, looksLikeXlsx, parseAbrpXlsx } from "./abrp.js";
 import { bufferBbox, haversineMi, tilesForBbox } from "./geo.js";
 import { defaultDwellMinutes, fromPlaces, fromTrackFile, looksLikeAbrpFile, parseLink } from "./providers.js";
-import { pickCharger } from "./abrp.js";
 import { applyDwell, dwellBefore, matrix, routePlaces } from "./routing.js";
 import { decodeShare, sharePayloadFrom, shareUrl } from "./share.js";
 import { defaultDepartureLocal, fmtDateTime, fmtHHMM, fmtTime, instantFromWallClock, isGeneralConference, toDatetimeLocal, tzAbbrev, wallClockValue } from "./tz.js";
@@ -649,7 +648,7 @@ async function importAbrp(fileOrBuffer) {
     if (!s.detail) return { query: s.name, name: s.name };
     try {
       const hits = (await suggest(s.name, { limit: 12 })).filter((h) => /charging_station/.test(h.kind || "") || h.name.toLowerCase().startsWith(s.name.split(" ")[0].toLowerCase()));
-      const hit = pickCharger(s.detail, hits);
+      const hit = pickByAddress(s.detail, hits);
       return hit ? { ...hit, name: hit.name } : { query: s.name, name: s.name };
     } catch { return { query: s.name, name: s.name }; }
   }));

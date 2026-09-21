@@ -7,11 +7,11 @@ import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexB
 import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal, weekdayIn, wallClockValue, instantFromWallClock, tzAbbrev, generalConferenceDays, isGeneralConference } from "./js/tz.js";
 import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS, leaveBy, reapply } from "./js/finder.js";
 import { dwellBefore, applyDwell } from "./js/routing.js";
-import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, stopNameDetail, pickCharger, isUnresolvableName, readZipEntry } from "./js/abrp.js";
+import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, stopNameDetail, isUnresolvableName, readZipEntry } from "./js/abrp.js";
 import { deflateRawSync } from "node:zlib";
 import { inputsKey, serializePlan, revivePlan, shiftPlan, savePlan, loadPlan, planStore } from "./js/plan.js";
 import { encodeShare, decodeShare, sharePayloadFrom, shareUrl } from "./js/share.js";
-import { rankSuggestions, label } from "./js/geocode.js";
+import { rankSuggestions, label, pickByAddress } from "./js/geocode.js";
 import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes, googleWaypointCoords } from "./js/providers.js";
 
 let passed = 0, failed = 0;
@@ -589,7 +589,7 @@ test("cleanStopName strips bracketed tags; isUnresolvableName spots placeholders
   assert.equal(stopNameDetail("Tesla Supercharger Moapa, NV [Tesla]"), null);
 });
 
-test("pickCharger chooses among a city's chargers by ABRP's street fragment", () => {
+test("pickByAddress chooses among a city's chargers by ABRP's street fragment", () => {
   // Photon's real answers for "Tesla Supercharger Las Vegas, NV" and Barstow.
   const lv = [
     "Tesla Supercharger, 6509 South Las Vegas Boulevard, Las Vegas, Nevada",
@@ -598,20 +598,27 @@ test("pickCharger chooses among a city's chargers by ABRP's street fragment", ()
     "Tesla Supercharger, 2208 South Nellis Boulevard, Las Vegas, Nevada",
     "Tesla Supercharger, 500 East Windmill Lane, Las Vegas, Nevada",
   ].map((name) => ({ name, kind: "amenity:charging_station" }));
-  assert.equal(pickCharger("Tropical Pkwy", lv).name, lv[2].name);
-  assert.equal(pickCharger("3545 S Las Vegas Blvd", lv).name, lv[1].name, "house number beats the shared street words");
-  assert.equal(pickCharger("Nellis", lv).name, lv[3].name);
-  assert.equal(pickCharger("Windmill Ln", lv).name, lv[4].name);
-  assert.equal(pickCharger("Some Unknown Rd", lv).name, lv[0].name, "no match: first hit");
-  assert.equal(pickCharger(null, lv).name, lv[0].name);
-  assert.equal(pickCharger("x", []), null);
+  assert.equal(pickByAddress("Tropical Pkwy", lv).name, lv[2].name);
+  assert.equal(pickByAddress("3545 S Las Vegas Blvd", lv).name, lv[1].name, "house number beats the shared street words");
+  assert.equal(pickByAddress("Nellis", lv).name, lv[3].name);
+  assert.equal(pickByAddress("Windmill Ln", lv).name, lv[4].name);
+  assert.equal(pickByAddress("Some Unknown Rd", lv).name, lv[0].name, "no match: first hit");
+  assert.equal(pickByAddress(null, lv).name, lv[0].name);
+  assert.equal(pickByAddress("x", []), null);
   const barstow = [
     "Tesla Supercharger, 1503 East Main Street, Barstow, California",
     "Tesla Supercharger, 2812 Lenwood Road, Barstow, California",
     "Tesla Supercharger - Barstow, CA - Tanger Way, 2796 Tanger Way, Barstow, California",
   ].map((name) => ({ name, kind: "amenity:charging_station" }));
-  assert.equal(pickCharger("Lenwood Rd", barstow).name, barstow[1].name);
-  assert.equal(pickCharger("Tanger Way", barstow).name, barstow[2].name);
+  assert.equal(pickByAddress("Lenwood Rd", barstow).name, barstow[1].name);
+  assert.equal(pickByAddress("Tanger Way", barstow).name, barstow[2].name);
+  // The same scorer serves a restaurant address: Boise's McDonald's, as Photon lists them.
+  const mcd = ["6190 South Five Mile Road", "6574 South Federal Way", "2510 West Fairview Avenue", "1375 South Broadway Avenue", "1185 South Vista Avenue", "9804 West Fairview Avenue", "7222 West Overland Road", "7811 West Fairview Avenue"]
+    .map((a) => ({ name: `McDonald's, ${a}, Boise, Idaho`, kind: "amenity:fast_food" }));
+  assert.equal(pickByAddress(" 1185 S Vista Ave, Boise, ID", mcd).name, mcd[4].name);
+  assert.equal(pickByAddress(" 7811 W Fairview Ave, Boise, ID", mcd).name, mcd[7].name, "house number picks among three on Fairview");
+  assert.equal(pickByAddress(" Overland Rd, Boise", mcd).name, mcd[6].name);
+  assert.equal(pickByAddress(" Boise, ID", mcd).name, mcd[0].name, "city alone matches all equally: first hit");
   assert.ok(isUnresolvableName("Home") && isUnresolvableName("Point on map") && !isUnresolvableName("Provo, UT"));
 });
 

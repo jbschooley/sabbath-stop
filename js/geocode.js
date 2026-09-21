@@ -72,12 +72,39 @@ export async function suggest(query, { limit = 6, bias } = {}) {
   return places;
 }
 
-// One-shot geocode for a pasted place name. Takes the top-ranked hit; the
-// typed fields are where ambiguity gets a picker.
+// Among several hits, the one whose address best matches `detail`, the
+// street part of what was asked for: a matching house number counts double,
+// each street word once; suffixes and compass letters are ignored. With no
+// match at all the first hit stands. Written for ABRP's "Tesla Supercharger
+// Beaver, UT - 525 W", it serves any "Name, 1185 S Vista Ave, Boise, ID":
+// Boise has eight McDonald's, and the address is what tells them apart.
+const NOISE = new Set(["rd", "road", "st", "street", "ave", "avenue", "dr", "drive", "blvd", "boulevard", "hwy", "highway", "ln", "lane", "way", "pkwy", "parkway", "ct", "court", "pl", "n", "s", "e", "w", "north", "south", "east", "west", "the", "and"]);
+export function pickByAddress(detail, hits) {
+  if (!hits.length) return null;
+  if (!detail) return hits[0];
+  const words = detail.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !NOISE.has(w));
+  const number = words.find((w) => /^\d+$/.test(w));
+  let best = hits[0], bestScore = 0;
+  for (const h of hits) {
+    const text = ` ${(h.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+    let score = 0;
+    for (const w of words) {
+      if (!text.includes(` ${w} `)) continue;
+      score += w === number ? 2 : 1;
+    }
+    if (score > bestScore) { best = h; bestScore = score; }
+  }
+  return best;
+}
+
+// One-shot geocode for a pasted place name. The typed fields are where
+// ambiguity gets a picker; here, anything after the name's first comma is
+// treated as an address and used to choose among same-named hits.
 export async function geocodeOne(query) {
-  const hits = await suggest(query, { limit: 5 });
+  const hits = await suggest(query, { limit: 12 });
   if (!hits.length) throw new Error(`Could not find "${query}"`);
-  return hits[0];
+  const comma = query.indexOf(",");
+  return comma > 0 ? pickByAddress(query.slice(comma + 1), hits) : hits[0];
 }
 
 export async function reverse(lng, lat) {
