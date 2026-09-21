@@ -1,0 +1,592 @@
+[
+  {
+    "code": "en",
+    "label": "English",
+    "count": 16603
+  },
+  {
+    "code": "es",
+    "label": "Spanish",
+    "count": 7747
+  },
+  {
+    "code": "pt",
+    "label": "Portuguese",
+    "count": 2227
+  },
+  {
+    "code": "fr",
+    "label": "French",
+    "count": 1041
+  },
+  {
+    "code": "tl",
+    "label": "Tagalog",
+    "count": 483
+  },
+  {
+    "code": "to",
+    "label": "Tongan",
+    "count": 324
+  },
+  {
+    "code": "ceb",
+    "label": "Cebuano",
+    "count": 323
+  },
+  {
+    "code": "sm",
+    "label": "Samoan",
+    "count": 305
+  },
+  {
+    "code": "ilo",
+    "label": "Ilokano",
+    "count": 226
+  },
+  {
+    "code": "ja",
+    "label": "Japanese",
+    "count": 217
+  },
+  {
+    "code": "de",
+    "label": "German",
+    "count": 167
+  },
+  {
+    "code": "zh",
+    "label": "Chinese",
+    "count": 154
+  },
+  {
+    "code": "hil",
+    "label": "Hiligaynon",
+    "count": 120
+  },
+  {
+    "code": "ko",
+    "label": "Korean",
+    "count": 99
+  },
+  {
+    "code": "it",
+    "label": "Italian",
+    "count": 90
+  },
+  {
+    "code": "ht",
+    "label": "Haitian",
+    "count": 67
+  },
+  {
+    "code": "ru",
+    "label": "Russian",
+    "count": 63
+  },
+  {
+    "code": "sw",
+    "label": "Swahili",
+    "count": 58
+  },
+  {
+    "code": "bik",
+    "label": "Bikolano",
+    "count": 56
+  },
+  {
+    "code": "war",
+    "label": "Waray",
+    "count": 55
+  },
+  {
+    "code": "mg",
+    "label": "Malagasy",
+    "count": 41
+  },
+  {
+    "code": "gil",
+    "label": "Kiribati",
+    "count": 41
+  },
+  {
+    "code": "th",
+    "label": "Thai",
+    "count": 39
+  },
+  {
+    "code": "pag",
+    "label": "Pangasinan",
+    "count": 39
+  },
+  {
+    "code": "sv",
+    "label": "Swedish",
+    "count": 38
+  },
+  {
+    "code": "bi",
+    "label": "Bislama",
+    "count": 31
+  },
+  {
+    "code": "nl",
+    "label": "Dutch",
+    "count": 30
+  },
+  {
+    "code": "km",
+    "label": "Cambodian",
+    "count": 29
+  },
+  {
+    "code": "ig",
+    "label": "Igbo",
+    "count": 29
+  },
+  {
+    "code": "uk",
+    "label": "Ukrainian",
+    "count": 28
+  },
+  {
+    "code": "fi",
+    "label": "Finnish",
+    "count": 28
+  },
+  {
+    "code": "fj",
+    "label": "Fijian",
+    "count": 25
+  },
+  {
+    "code": "mn",
+    "label": "Mongolian",
+    "count": 24
+  },
+  {
+    "code": "id",
+    "label": "Indonesian",
+    "count": 22
+  },
+  {
+    "code": "mh",
+    "label": "Marshallese",
+    "count": 21
+  },
+  {
+    "code": "da",
+    "label": "Danish",
+    "count": 20
+  },
+  {
+    "code": "ase",
+    "label": "American Sign Language",
+    "count": 19
+  },
+  {
+    "code": "no",
+    "label": "Norwegian",
+    "count": 19
+  },
+  {
+    "code": "hu",
+    "label": "Hungarian",
+    "count": 18
+  },
+  {
+    "code": "pam",
+    "label": "Pampango",
+    "count": 18
+  },
+  {
+    "code": "ibg",
+    "label": "Ibanag",
+    "count": 18
+  },
+  {
+    "code": "quc",
+    "label": "Quiche",
+    "count": 18
+  },
+  {
+    "code": "kek",
+    "label": "Kekchi",
+    "count": 17
+  },
+  {
+    "code": "vi",
+    "label": "Vietnamese",
+    "count": 16
+  },
+  {
+    "code": "ro",
+    "label": "Romanian",
+    "count": 15
+  },
+  {
+    "code": "sq",
+    "label": "Albanian",
+    "count": 14
+  },
+  {
+    "code": "ms",
+    "label": "Malay",
+    "count": 13
+  },
+  {
+    "code": "cs",
+    "label": "Czech",
+    "count": 12
+  },
+  {
+    "code": "kam",
+    "label": "Kamba",
+    "count": 12
+  },
+  {
+    "code": "ty",
+    "label": "Tahitian",
+    "count": 12
+  },
+  {
+    "code": "akl",
+    "label": "Aklanon",
+    "count": 12
+  },
+  {
+    "code": "pl",
+    "label": "Polish",
+    "count": 11
+  },
+  {
+    "code": "ur",
+    "label": "Urdu",
+    "count": 11
+  },
+  {
+    "code": "meu",
+    "label": "Motu",
+    "count": 11
+  },
+  {
+    "code": "chk",
+    "label": "Chuukese",
+    "count": 10
+  },
+  {
+    "code": "tw",
+    "label": "Twi",
+    "count": 10
+  },
+  {
+    "code": "ibb",
+    "label": "Ibibio",
+    "count": 10
+  },
+  {
+    "code": "pon",
+    "label": "Pohnpeian",
+    "count": 9
+  },
+  {
+    "code": "hmn",
+    "label": "Hmong",
+    "count": 9
+  },
+  {
+    "code": "am",
+    "label": "Amharic",
+    "count": 8
+  },
+  {
+    "code": "rw",
+    "label": "Kinyarwanda",
+    "count": 8
+  },
+  {
+    "code": "bg",
+    "label": "Bulgarian",
+    "count": 7
+  },
+  {
+    "code": "sul",
+    "label": "Surigaonon",
+    "count": 7
+  },
+  {
+    "code": "hr",
+    "label": "Croatian",
+    "count": 6
+  },
+  {
+    "code": "tzo",
+    "label": "Tzotzil",
+    "count": 6
+  },
+  {
+    "code": "hy",
+    "label": "Armenian",
+    "count": 5
+  },
+  {
+    "code": "cag",
+    "label": "Nivacle",
+    "count": 5
+  },
+  {
+    "code": "cbk",
+    "label": "Chavacano",
+    "count": 5
+  },
+  {
+    "code": "rar",
+    "label": "Rarotongan",
+    "count": 5
+  },
+  {
+    "code": "mam",
+    "label": "Mam",
+    "count": 5
+  },
+  {
+    "code": "zu",
+    "label": "Zulu",
+    "count": 4
+  },
+  {
+    "code": "nv",
+    "label": "Navajo",
+    "count": 4
+  },
+  {
+    "code": "sk",
+    "label": "Slovak",
+    "count": 4
+  },
+  {
+    "code": "yo",
+    "label": "Yoruba",
+    "count": 4
+  },
+  {
+    "code": "lt",
+    "label": "Lithuanian",
+    "count": 4
+  },
+  {
+    "code": "men",
+    "label": "Mende",
+    "count": 4
+  },
+  {
+    "code": "efi",
+    "label": "Efik",
+    "count": 4
+  },
+  {
+    "code": "msb",
+    "label": "Masbatenyo",
+    "count": 4
+  },
+  {
+    "code": "et",
+    "label": "Estonian",
+    "count": 3
+  },
+  {
+    "code": "pes",
+    "label": "Persian",
+    "count": 3
+  },
+  {
+    "code": "tr",
+    "label": "Turkish",
+    "count": 3
+  },
+  {
+    "code": "te",
+    "label": "Telugu",
+    "count": 3
+  },
+  {
+    "code": "kea",
+    "label": "Kabuverdianu",
+    "count": 3
+  },
+  {
+    "code": "tiv",
+    "label": "Tiv",
+    "count": 3
+  },
+  {
+    "code": "sn",
+    "label": "Shona",
+    "count": 3
+  },
+  {
+    "code": "ne",
+    "label": "Nepali",
+    "count": 3
+  },
+  {
+    "code": "ka",
+    "label": "Georgian",
+    "count": 2
+  },
+  {
+    "code": "lv",
+    "label": "Latvian",
+    "count": 2
+  },
+  {
+    "code": "xh",
+    "label": "Xhosa",
+    "count": 2
+  },
+  {
+    "code": "sr",
+    "label": "Serbian",
+    "count": 2
+  },
+  {
+    "code": "ta",
+    "label": "Tamil",
+    "count": 2
+  },
+  {
+    "code": "is",
+    "label": "Icelandic",
+    "count": 2
+  },
+  {
+    "code": "el",
+    "label": "Greek",
+    "count": 2
+  },
+  {
+    "code": "idu",
+    "label": "Idoma",
+    "count": 2
+  },
+  {
+    "code": "fat",
+    "label": "Fante",
+    "count": 2
+  },
+  {
+    "code": "sl",
+    "label": "Slovenian",
+    "count": 2
+  },
+  {
+    "code": "niu",
+    "label": "Niuean",
+    "count": 2
+  },
+  {
+    "code": "ksw",
+    "label": "Karen",
+    "count": 2
+  },
+  {
+    "code": "ay",
+    "label": "Aymara",
+    "count": 2
+  },
+  {
+    "code": "kos",
+    "label": "Kosraean",
+    "count": 2
+  },
+  {
+    "code": "ln",
+    "label": "Lingala",
+    "count": 2
+  },
+  {
+    "code": "qvi",
+    "label": "Quichua, Imbabura Highland",
+    "count": 1
+  },
+  {
+    "code": "mt",
+    "label": "Maltese",
+    "count": 1
+  },
+  {
+    "code": "ar",
+    "label": "Arabic",
+    "count": 1
+  },
+  {
+    "code": "ann",
+    "label": "Obolo",
+    "count": 1
+  },
+  {
+    "code": "kri",
+    "label": "Krio",
+    "count": 1
+  },
+  {
+    "code": "ee",
+    "label": "Ewe",
+    "count": 1
+  },
+  {
+    "code": "be",
+    "label": "Belarusian",
+    "count": 1
+  },
+  {
+    "code": "rtm",
+    "label": "Rotuman",
+    "count": 1
+  },
+  {
+    "code": "mi",
+    "label": "Maori",
+    "count": 1
+  },
+  {
+    "code": "din",
+    "label": "Dinka",
+    "count": 1
+  },
+  {
+    "code": "lo",
+    "label": "Lao",
+    "count": 1
+  },
+  {
+    "code": "yap",
+    "label": "Yapese",
+    "count": 1
+  },
+  {
+    "code": "tzj",
+    "label": "Tzutujil",
+    "count": 1
+  },
+  {
+    "code": "lg",
+    "label": "Luganda",
+    "count": 1
+  },
+  {
+    "code": "pau",
+    "label": "Palauan",
+    "count": 1
+  },
+  {
+    "code": "ikw",
+    "label": "Ikwere",
+    "count": 1
+  },
+  {
+    "code": "pap",
+    "label": "Papiamento",
+    "count": 1
+  }
+]
