@@ -22,9 +22,11 @@ export class MatrixLimitError extends Error {
 // OSRM's table service when Valhalla is down or busy.
 export async function matrix(sources, targets, { departure } = {}) {
   try {
+    if (!valhallaAvailable()) throw valhallaDownError();
     return await matrixValhalla(sources, targets, departure);
   } catch (e) {
     if (e instanceof MatrixLimitError) throw e;
+    noteValhallaFailure(e);
     try {
       return await matrixOsrm(sources, targets);
     } catch (e2) {
@@ -40,7 +42,7 @@ async function matrixValhalla(sources, targets, departure) {
     costing: "auto",
   };
   if (departure) body.date_time = { type: 1, value: localStamp(departure) };
-  const resp = await fetch(MATRIX_URL, { method: "POST", body: JSON.stringify(body) });
+  const resp = await fetchWithTimeout(MATRIX_URL, { method: "POST", body: JSON.stringify(body) });
   const json = await resp.json().catch(() => null);
   if (!resp.ok || !json || !json.sources_to_targets) {
     const msg = (json && json.error) || `HTTP ${resp.status}`;
@@ -56,11 +58,39 @@ async function matrixOsrm(sources, targets) {
   const src = sources.map((_, i) => i).join(";");
   const dst = targets.map((_, i) => sources.length + i).join(";");
   const url = `${OSRM_URL.replace("/route/", "/table/")}/${coords}?sources=${src}&destinations=${dst}&annotations=duration`;
-  const resp = await fetch(url);
+  const resp = await fetchWithTimeout(url);
   const json = await resp.json().catch(() => null);
   if (!resp.ok || !json || json.code !== "Ok" || !json.durations) throw new Error((json && json.message) || `HTTP ${resp.status}`);
   return json.durations.map((row) => row.map((v) => (v == null ? null : v)));
 }
+
+// ---------------------------------------------------------------- resilience
+
+// Every provider call gets a hard timeout so a host that is refusing or
+// hanging connections fails fast and the fallback runs promptly.
+export const CALL_TIMEOUT_MS = 15000;
+export async function fetchWithTimeout(url, opts = {}, ms = CALL_TIMEOUT_MS) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } catch (e) {
+    throw new Error(e.name === "AbortError" ? `timed out after ${ms / 1000}s` : e.message);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Circuit breaker: after Valhalla fails at the transport level or with a
+// 5xx, skip it for a while and go straight to OSRM instead of paying the
+// timeout on every call.
+const BREAKER_MS = 60000;
+let valhallaDownUntil = 0;
+export function valhallaAvailable() { return Date.now() >= valhallaDownUntil; }
+function noteValhallaFailure(e) {
+  if (/timed out|Failed to fetch|NetworkError|HTTP 5\d\d|^5\d\d$/i.test(e.message || "")) valhallaDownUntil = Date.now() + BREAKER_MS;
+}
+function valhallaDownError() { return new Error("Valhalla skipped: recent failure"); }
 
 // Time spent at intermediate stops. places[k].dwellSeconds is how long you
 // stay at stop k (origin and destination carry none). dwellBefore(legIndex)
@@ -146,8 +176,10 @@ export async function routePlaces(places, { departure } = {}) {
 
   let result;
   try {
+    if (!valhallaAvailable()) throw valhallaDownError();
     result = await routeValhalla(places, departure);
   } catch (e) {
+    noteValhallaFailure(e);
     try {
       result = await routeOsrm(places);
     } catch (e2) {
@@ -170,7 +202,7 @@ async function routeValhalla(places, departure) {
   if (departure) body.date_time = { type: 1, value: localStamp(departure) };
   // A string body with the default text/plain content type is a "simple"
   // request: no CORS preflight round-trip against a donated server.
-  const resp = await fetch(VALHALLA_URL, { method: "POST", body: JSON.stringify(body) });
+  const resp = await fetchWithTimeout(VALHALLA_URL, { method: "POST", body: JSON.stringify(body) });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const json = await resp.json();
   const trip = json.trip;
@@ -221,7 +253,7 @@ async function routeValhalla(places, departure) {
 async function routeOsrm(places) {
   const coords = places.map((p) => `${p.lng},${p.lat}`).join(";");
   const url = `${OSRM_URL}/${coords}?overview=full&geometries=polyline6&annotations=duration,distance&steps=false`;
-  const resp = await fetch(url);
+  const resp = await fetchWithTimeout(url, {}, 30000);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const json = await resp.json();
   const route = json.routes && json.routes[0];
