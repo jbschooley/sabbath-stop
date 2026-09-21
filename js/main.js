@@ -658,9 +658,13 @@ let map, routeLayer, clusterOn, clusterOff;
 
 function initMap() {
   map = L.map("map", { zoomControl: true }).setView([39.5, -111.5], 6);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  // CARTO's Voyager basemap: OpenStreetMap data, served with a 2x variant so
+  // phones get crisp tiles ({r} becomes "@2x" on high-DPI screens). Free for
+  // non-commercial use with attribution; OSM's own tiles have no 2x version.
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    maxZoom: 20,
+    subdomains: "abcd",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
   }).addTo(map);
   clusterOn = L.markerClusterGroup({ maxClusterRadius: 40 });
   clusterOff = L.markerClusterGroup({ maxClusterRadius: 60, iconCreateFunction: mutedClusterIcon });
