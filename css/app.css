@@ -99,8 +99,17 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 .waypoints .row { margin-bottom: 6px; }
 .waypoints input.dwell { width: 64px; flex: 0 0 auto; padding: 8px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
 .waypoints .unit { font-size: 12.5px; color: var(--muted); flex: 0 0 auto; }
-.waypoints .btn.move { min-width: 30px; padding: 0 6px; }
-.waypoints .btn.move:disabled { opacity: .3; }
+.waypoints .handle {
+  flex: 0 0 auto; align-self: stretch; display: inline-flex; align-items: center; padding: 0 4px;
+  color: var(--muted); font-size: 14px; letter-spacing: -3px; cursor: grab; touch-action: none; user-select: none;
+  border-radius: var(--radius);
+}
+.waypoints .handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.waypoints .field { position: relative; }
+.waypoints .field.dragging { opacity: .9; z-index: 5; }
+.waypoints .field.dragging > .row { box-shadow: 0 6px 18px rgba(0,0,0,.18); background: var(--panel); border-radius: var(--radius); }
+.waypoints .field.dragging .handle { cursor: grabbing; }
+.waypoints .field:not(.dragging) { transition: transform .12s ease; }
 .duration input[type="number"] { width: 72px; flex: 0 0 auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
 .duration span { color: var(--muted); font-size: 13px; }
 

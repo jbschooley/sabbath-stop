@@ -1,4 +1,5 @@
-// Routing adapter. Valhalla (FOSSGIS) first, OSRM demo server as fallback.
+// Routing adapter. Valhalla (FOSSGIS) and the OSRM demo server, each the
+// first choice for what it does best; see the provider order below.
 // Both are donated community infrastructure: results are cached in
 // localStorage and the base URLs live here so self-hosting is a one-line change.
 
@@ -73,31 +74,31 @@ export async function fetchWithTimeout(url, opts = {}, ms = CALL_TIMEOUT_MS) {
   }
 }
 
-// Provider order is adaptive: whichever provider answered last goes first,
-// and a transport failure or 5xx flips the order and benches that provider
-// for a minute. An outage then costs one call, not one per search.
+// Each call kind has its own provider order. Routes go to Valhalla first:
+// OSRM's car profile drives every posted limit at 0.8x, so a freeway trip
+// comes back 10-15% slower than Valhalla or Google, and the trunk route sets
+// every arrival time. Matrices go to OSRM first: its table endpoint answers
+// hundreds of cells in under a second with no distance limit, while Valhalla
+// caps a matrix at 100 locations and 150 km, and a detour leg is a few
+// minutes of local road where the profile difference is noise. A transport
+// failure or 5xx benches a provider for a minute so an outage costs one
+// call, not one per search, and the order is restored when the bench ends.
 const BREAKER_MS = 60000;
-const PREF_KEY = "ss:router";
 const downUntil = { valhalla: 0, osrm: 0 };
-let preferred = "valhalla";
-try { preferred = localStorage.getItem(PREF_KEY) === "osrm" ? "osrm" : "valhalla"; } catch { /* ignore */ }
+const ORDER = { Routing: ["valhalla", "osrm"], Matrix: ["osrm", "valhalla"] };
+try { localStorage.removeItem("ss:router"); } catch { /* older builds persisted a sticky preference */ }
 
-export function providerOrder() {
-  const other = preferred === "valhalla" ? "osrm" : "valhalla";
-  return [preferred, other];
-}
+export function providerOrder(kind = "Routing") { return ORDER[kind].slice(); }
 export function available(name) { return Date.now() >= downUntil[name]; }
-function noteSuccess(name) {
-  if (preferred !== name) { preferred = name; try { localStorage.setItem(PREF_KEY, name); } catch { /* ignore */ } }
-}
+function noteSuccess() {}
 function noteFailure(name, e) {
   if (/timed out|Failed to fetch|NetworkError|Load failed|HTTP 5\d\d/i.test(e.message || "")) downUntil[name] = Date.now() + BREAKER_MS;
 }
 
-// Try each provider in order; the first success wins and becomes preferred.
+// Try each provider in order; the first success wins.
 async function withProviders(kind, attempts) {
   const errors = [];
-  for (const name of providerOrder()) {
+  for (const name of providerOrder(kind)) {
     if (!available(name)) { errors.push(`${name}: benched after a recent failure`); continue; }
     try {
       const result = await attempts[name]();

@@ -26,8 +26,10 @@ export const IDEAL_EARLY = 12; // minutes before start
 // pairs, and the public instance takes about 4 ms per pair, so 0 (nearest
 // vertex only) is the speed setting and 4 is the accuracy setting.
 export const EXIT_SPAN_MI = 0;
-export const BATCH_BUILDINGS = 20;
-export const BATCH_SPAN_MI = 60; // keeps every pair inside the 150 km matrix limit
+// One exit vertex per building, so a batch of N costs 2N locations: 40
+// stays under Valhalla's 100-location cap when it is the matrix provider.
+export const BATCH_BUILDINGS = 40;
+export const BATCH_SPAN_MI = 60; // keeps every pair inside Valhalla's 150 km matrix limit
 
 export const DEFAULT_FILTERS = {
   subtypes: [],          // codes; empty = nothing selected -> prompt the user

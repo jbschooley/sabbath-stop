@@ -316,10 +316,9 @@ function addWaypointRow(prefill, text, dwellMin) {
   row.className = "field suggest";
   row.dataset.idx = idx;
   row.innerHTML = `<label>Via</label><div class="row tight">
+      <span class="handle" tabindex="0" role="button" title="Drag to reorder (or use the arrow keys)" aria-label="Reorder stop">⋮⋮</span>
       <input type="text" placeholder="Optional stop" autocomplete="off">
       <input type="number" class="dwell" min="0" max="600" step="5" placeholder="0" inputmode="numeric" title="Minutes at this stop" aria-label="Minutes at this stop"><span class="unit">min</span>
-      <button class="btn icon move" data-dir="-1" title="Move up" aria-label="Move stop up">↑</button>
-      <button class="btn icon move" data-dir="1" title="Move down" aria-label="Move stop down">↓</button>
       <button class="btn icon remove" title="Remove" aria-label="Remove stop">×</button>
     </div><ul hidden></ul>`;
   const input = row.querySelector("input[type=text]"), list = row.querySelector("ul"), dwell = row.querySelector("input.dwell");
@@ -327,29 +326,64 @@ function addWaypointRow(prefill, text, dwellMin) {
   if (dwellMin) dwell.value = dwellMin;
   attachSuggest(input, list, (p) => { state.places.waypoints[idx] = p; });
   dwell.addEventListener("change", () => { state.places.dwellMin[idx] = Math.max(0, parseFloat(dwell.value) || 0); saveRouteInput(); });
-  row.querySelector("button.remove").addEventListener("click", () => { state.places.waypoints[idx] = undefined; state.planLegSeconds = null; row.remove(); refreshMoveButtons(); saveRouteInput(); });
-  // Route order is the rows' DOM order, so moving a row is the whole change.
-  for (const btn of row.querySelectorAll("button.move")) {
-    btn.addEventListener("click", () => {
-      const dir = Number(btn.dataset.dir);
-      const sibling = dir < 0 ? row.previousElementSibling : row.nextElementSibling;
-      if (!sibling) return;
-      if (dir < 0) wrap.insertBefore(row, sibling); else wrap.insertBefore(sibling, row);
-      state.planLegSeconds = null;
-      refreshMoveButtons();
-      saveRouteInput();
-    });
-  }
+  row.querySelector("button.remove").addEventListener("click", () => { state.places.waypoints[idx] = undefined; state.planLegSeconds = null; row.remove(); saveRouteInput(); });
+  attachDragHandle(row, row.querySelector(".handle"));
   wrap.appendChild(row);
-  refreshMoveButtons();
 }
 
-// First stop can't move up, last can't move down.
-function refreshMoveButtons() {
-  const rows = [...document.querySelectorAll("#waypoints .field")];
-  rows.forEach((row, i) => {
-    row.querySelector('button.move[data-dir="-1"]').disabled = i === 0;
-    row.querySelector('button.move[data-dir="1"]').disabled = i === rows.length - 1;
+// Route order is the rows' DOM order, so reordering is moving the row.
+// Pointer events rather than HTML drag-and-drop, which iOS Safari lacks.
+// The lifted row follows the pointer; the DOM reorders as it crosses the
+// midpoint of a neighbour, and the transform is re-based so it doesn't jump.
+function attachDragHandle(row, handle) {
+  const wrap = $("waypoints");
+  const finish = () => { state.planLegSeconds = null; saveRouteInput(); };
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    row.classList.add("dragging");
+    let translate = 0;
+    const naturalTop = () => row.getBoundingClientRect().top - translate;
+    const grabOffset = e.clientY - naturalTop();
+    const setTranslate = (v) => { translate = v; row.style.transform = `translateY(${v}px)`; };
+
+    const move = (ev) => {
+      setTranslate(ev.clientY - grabOffset - naturalTop());
+      for (const other of wrap.querySelectorAll(".field")) {
+        if (other === row) continue;
+        const r = other.getBoundingClientRect();
+        const mid = r.top + r.height / 2;
+        const otherIsBelow = !!(row.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING);
+        if (otherIsBelow && ev.clientY > mid) wrap.insertBefore(other, row);
+        else if (!otherIsBelow && ev.clientY < mid) wrap.insertBefore(row, other);
+        else continue;
+        // The row's natural position changed under it: re-base so it stays put.
+        setTranslate(ev.clientY - grabOffset - naturalTop());
+      }
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      row.classList.remove("dragging");
+      row.style.transform = "";
+      finish();
+    };
+    // Listen on the window, not the handle: moving the row in the DOM can
+    // drop pointer capture, and the pointer is rarely over the handle on release.
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  });
+  // Keyboard: arrow keys on the focused handle move the stop.
+  handle.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const sib = e.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
+    if (!sib) return;
+    if (e.key === "ArrowUp") wrap.insertBefore(row, sib); else wrap.insertBefore(sib, row);
+    handle.focus();
+    finish();
   });
 }
 
