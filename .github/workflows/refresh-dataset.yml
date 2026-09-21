@@ -84,7 +84,14 @@ jobs:
           fi
           COUNTS=$(python3 -c "import json;m=json.load(open('data/manifest.json'));c=m['counts'];print(f\"{c['buildings']} buildings, {c['units']} units\")")
           git commit -m "data: monthly refresh ($COUNTS)"
-          git push
+          # The harvest takes half an hour; main may have moved meanwhile.
+          # Rebase the data commit on top and retry the push a few times.
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push && exit 0
+            echo "push attempt $attempt failed; retrying"
+            sleep 10
+          done
+          exit 1
 
       - name: Upload dataset artifact
         uses: actions/upload-artifact@v4
