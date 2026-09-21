@@ -52,10 +52,10 @@ export function rankSuggestions(query, places) {
 }
 
 // Returns up to `limit` places. Callers must debounce; this only memoizes.
-export async function suggest(query, { limit = 6, bias } = {}) {
+export async function suggest(query, { limit = 6, bias, biasScale = 0.7 } = {}) {
   const q = query.trim();
   if (q.length < 3) return [];
-  const key = `${q}|${limit}|${bias ? `${bias.lng.toFixed(1)},${bias.lat.toFixed(1)}` : ""}`;
+  const key = `${q}|${limit}|${bias ? `${bias.lng.toFixed(1)},${bias.lat.toFixed(1)}|${biasScale}` : ""}`;
   if (memo.has(key)) return memo.get(key);
   // Ask for a few more than we show so a city that Photon ranked fifth can
   // still surface at the top.
@@ -63,7 +63,7 @@ export async function suggest(query, { limit = 6, bias } = {}) {
   // location_bias_scale: 0 = pure proximity, 1 = pure importance. At the
   // default 0.2 a kebab shop near the map beats the city of Istanbul; at 0.7
   // the city wins while the nearer of several Springfields is still first.
-  if (bias) { params.set("lat", String(bias.lat)); params.set("lon", String(bias.lng)); params.set("location_bias_scale", "0.7"); }
+  if (bias) { params.set("lat", String(bias.lat)); params.set("lon", String(bias.lng)); params.set("location_bias_scale", String(biasScale)); }
   const resp = await fetch(`${PHOTON_URL}/api/?${params}`);
   if (!resp.ok) throw new Error(`Photon HTTP ${resp.status}`);
   const json = await resp.json();
@@ -97,14 +97,71 @@ export function pickByAddress(detail, hits) {
   return best;
 }
 
+// "71 N 5050 E, Rigby" or "TACO BELL, N Main St, Logan, UT": which segment
+// is the street and which the town. The street is the first segment with a
+// number or a road word in it; the town is the next segment that is not a
+// state code or a postal code. Null when the text has no such shape.
+const ROAD_WORD = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|way|hwy|highway|pkwy|parkway|ct|court|pl|place|cir|circle|trl|trail)\b/i;
+const STATE_OR_ZIP = /^(?:[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?|\d{4,6})$/;
+export function addressParts(query) {
+  const segs = query.split(",").map((t) => t.trim()).filter(Boolean);
+  const i = segs.findIndex((t, k) => k < segs.length - 1 && (/\d/.test(t) || ROAD_WORD.test(t)));
+  if (i < 0) return null;
+  const rest = segs.slice(i + 1);
+  const town = rest.find((t) => !STATE_OR_ZIP.test(t));
+  if (!town) return null;
+  return { street: segs[i], town, townQuery: rest.join(", ") };
+}
+
+// "71 N 5050 E" -> "North 5050 East": drop the house number, spell out the
+// compass letters. Photon finds the road that way and not the other.
+export function expandStreet(street) {
+  return street
+    .replace(/^\d+[A-Za-z]?\s+/, "")
+    .replace(/\b([NSEW])\b\.?/g, (m, c) => ({ N: "North", S: "South", E: "East", W: "West" }[c]))
+    .replace(/\s+/g, " ").trim();
+}
+
 // One-shot geocode for a pasted place name. The typed fields are where
 // ambiguity gets a picker; here, anything after the name's first comma is
-// treated as an address and used to choose among same-named hits.
+// treated as an address and used to choose among same-named hits, and a
+// hit must at least name the town asked for. When nothing does, which is
+// what OpenStreetMap does with a rural grid address, fall back to the
+// street near that town, then to the town itself, and say so in the name
+// so the row shows the approximation.
 export async function geocodeOne(query) {
   const hits = await suggest(query, { limit: 12 });
-  if (!hits.length) throw new Error(`Could not find "${query}"`);
   const comma = query.indexOf(",");
-  return comma > 0 ? pickByAddress(query.slice(comma + 1), hits) : hits[0];
+  const detail = comma > 0 ? query.slice(comma + 1) : "";
+  const parts = comma > 0 ? addressParts(query) : null;
+  if (!parts) {
+    if (!hits.length) throw new Error(`Could not find "${query}"`);
+    return pickByAddress(detail, hits);
+  }
+  // The town must be one of the label's own parts: "71 Rigby Road, Sydney,
+  // Nova Scotia" mentions Rigby without being in it.
+  const town = parts.town.toLowerCase();
+  const inTown = hits.filter((h) => (h.name || "").toLowerCase().split(", ").includes(town));
+  if (inTown.length) return pickByAddress(detail, inTown);
+  const place = (await suggest(parts.townQuery, { limit: 5 }))[0];
+  if (!place) {
+    if (!hits.length) throw new Error(`Could not find "${query}"`);
+    return pickByAddress(detail, hits);
+  }
+  const street = expandStreet(parts.street);
+  if (street) {
+    const near = (await suggest(street, { limit: 6, bias: place, biasScale: 0.2 }))
+      .filter((h) => haversineMiles(h, place) <= 20 && /^highway:/.test(h.kind || ""));
+    if (near.length) return { ...near[0], name: `${query} (approximate: the street, not the house number)`, approx: true };
+  }
+  return { ...place, name: `${query} (approximate: the town, address not found)`, approx: true };
+}
+
+function haversineMiles(a, b) {
+  const R = 3958.8, toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
 }
 
 export async function reverse(lng, lat) {

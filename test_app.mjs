@@ -11,7 +11,7 @@ import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseC
 import { deflateRawSync } from "node:zlib";
 import { inputsKey, serializePlan, revivePlan, shiftPlan, savePlan, loadPlan, planStore } from "./js/plan.js";
 import { encodeShare, decodeShare, sharePayloadFrom, shareUrl } from "./js/share.js";
-import { rankSuggestions, label, pickByAddress } from "./js/geocode.js";
+import { rankSuggestions, label, pickByAddress, addressParts, expandStreet } from "./js/geocode.js";
 import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes, googleWaypointCoords } from "./js/providers.js";
 
 let passed = 0, failed = 0;
@@ -495,6 +495,34 @@ test("general conference is the first Sunday of April and October plus the Satur
   assert.equal(isGeneralConference("2026-10-11"), false);
   assert.equal(isGeneralConference("2026-09-27"), false);
   assert.equal(isGeneralConference(""), false);
+});
+
+test("addressParts finds the street and the town in a pasted address", () => {
+  assert.deepEqual(addressParts("71 N 5050 E, Rigby"), { street: "71 N 5050 E", town: "Rigby", townQuery: "Rigby" });
+  assert.deepEqual(addressParts("TACO BELL, N Main St, Logan, UT"), { street: "N Main St", town: "Logan", townQuery: "Logan, UT" });
+  assert.deepEqual(addressParts("Costa Vida, 801 W Main St, Boise, ID 83702"), { street: "801 W Main St", town: "Boise", townQuery: "Boise, ID 83702" });
+  assert.deepEqual(addressParts("1924 Colina Salida del Sol, San Clemente, CA"), { street: "1924 Colina Salida del Sol", town: "San Clemente", townQuery: "San Clemente, CA" });
+  assert.equal(addressParts("Tesla Supercharger Farr West, UT"), null, "no street: nothing to fall back from");
+  assert.equal(addressParts("Springfield, Missouri"), null);
+  assert.equal(addressParts("Boise, Idaho, ID"), null);
+  assert.equal(addressParts("801 W Main St, ID"), null, "a state is not a town");
+});
+
+test("a hit is in the town only when the town is one of its label's parts", () => {
+  // Same rule geocodeOne applies; kept here as the regression for the Nova Scotia miss.
+  const inTown = (label, town) => label.toLowerCase().split(", ").includes(town.toLowerCase());
+  assert.equal(inTown("71 Rigby Road, Sydney, Nova Scotia, Canada", "Rigby"), false);
+  assert.equal(inTown("Taco Bell, 1500 Main Street, Logan, Utah", "Logan"), true);
+  assert.equal(inTown("Costa Vida, 801 West Main Street, Boise, Idaho", "Boise"), true);
+  assert.equal(inTown("Rigby, Idaho", "Rigby"), true);
+});
+
+test("expandStreet drops the house number and spells out compass letters", () => {
+  assert.equal(expandStreet("71 N 5050 E"), "North 5050 East");
+  assert.equal(expandStreet("801 W Main St"), "West Main St");
+  assert.equal(expandStreet("N Main St"), "North Main St");
+  assert.equal(expandStreet("56 N State St"), "North State St");
+  assert.equal(expandStreet("Sunrise Canyon Rd"), "Sunrise Canyon Rd");
 });
 
 test("geocoder label carries the street line so two branches in one city differ", () => {
