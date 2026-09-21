@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexBuckets } from "./js/geo.js";
-import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal, weekdayIn, wallClockValue, instantFromWallClock } from "./js/tz.js";
+import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal, weekdayIn, wallClockValue, instantFromWallClock, tzAbbrev } from "./js/tz.js";
 import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS } from "./js/finder.js";
 import { dwellBefore, applyDwell } from "./js/routing.js";
 import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
@@ -112,6 +112,13 @@ test("a picker value is read in the origin's zone: 8:00 in California is 15:00Z"
   assert.equal(instantFromWallClock("2026-09-27T08:00", "America/Denver").toISOString(), "2026-09-27T14:00:00.000Z");
   assert.equal(instantFromWallClock("nonsense", "America/Denver"), null);
   assert.equal(wallClockValue(new Date("2026-09-27T15:00:00Z"), "America/Los_Angeles"), "2026-09-27T08:00");
+});
+test("tzAbbrev prefers a real abbreviation over a bare offset where one exists", () => {
+  const d = new Date("2026-09-27T12:00:00Z");
+  assert.equal(tzAbbrev(d, "America/Denver"), "MDT");
+  assert.equal(tzAbbrev(d, "Europe/Berlin"), "CEST");
+  assert.equal(tzAbbrev(d, "Australia/Sydney"), "AEST");
+  assert.match(tzAbbrev(d, "Pacific/Tongatapu"), /^GMT\+13$/); // no English abbreviation exists
 });
 test("Arizona has no DST", () => {
   assert.equal(zonedToInstant(2026, 7, 5, 9, 0, "America/Phoenix").toISOString(), "2026-07-05T16:00:00.000Z");

@@ -58,9 +58,22 @@ export function weekdayIn(date, tz) {
   return WEEKDAYS.includes(name) ? name : name;
 }
 
+// Short zone name. Each English locale only knows abbreviations for its own
+// part of the world (en-US: MDT but GMT+2; en-GB: CEST but GMT-6), so try a
+// few and keep the first that isn't a bare offset.
+const ABBREV_LOCALES = ["en-US", "en-GB", "en-AU", "en-NZ", "en-IN", "en-ZA"];
 export function tzAbbrev(date, tz) {
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(date);
-  return (parts.find((p) => p.type === "timeZoneName") || {}).value || tz;
+  let fallback = tz;
+  for (const loc of ABBREV_LOCALES) {
+    try {
+      const parts = new Intl.DateTimeFormat(loc, { timeZone: tz, timeZoneName: "short" }).formatToParts(date);
+      const name = (parts.find((p) => p.type === "timeZoneName") || {}).value;
+      if (!name) continue;
+      if (!/^(GMT|UTC)[+-]?\d*(:\d+)?$/.test(name)) return name;
+      if (fallback === tz) fallback = name;
+    } catch { /* unsupported locale: try the next */ }
+  }
+  return fallback;
 }
 
 export function fmtTime(date, tz) {
