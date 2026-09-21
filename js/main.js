@@ -22,8 +22,7 @@ const state = {
   route: null,
   candidates: [],
   selectedId: null,
-  places: { origin: null, destination: null, waypoints: [], dwellMin: [] },
-  planLegSeconds: null,  // per-leg drive times from an ABRP export, if any
+  planLegs: null,        // per-leg ABRP times for the route being searched, else null
   manifest: null,
   subtypes: [],
   tileCache: new Map(),
@@ -65,11 +64,8 @@ function sharePlan() {
   return {
     departure: $("departure").value,
     route: {
-      originText: r.originText, origin: r.origin,
-      destinationText: r.destinationText, destination: r.destination,
-      waypoints: r.waypoints,
+      stops: r.stops,
       trafficH: r.trafficH, trafficM: r.trafficM, trafficIncludesStops: r.trafficIncludesStops,
-      planLegSeconds: r.planLegSeconds,
     },
     filters: state.filters,
   };
@@ -114,23 +110,13 @@ function applySharedPlan() {
 }
 // The route part of the form as a plain object (what gets saved and shared).
 function routeSnapshot() {
-  const rows = [...document.querySelectorAll("#waypoints .field")];
   return {
     mode: state.routeMode,
-    originText: $("origin").value,
-    origin: state.places.origin,
-    destinationText: $("destination").value,
-    destination: state.places.destination,
-    waypoints: rows.map((row) => ({
-      text: row.querySelector("input[type=text]").value,
-      place: state.places.waypoints[row.dataset.idx] || null,
-      dwellMin: row.querySelector("input.dwell").value,
-    })),
+    stops: stopEntries().map((e) => ({ id: e.id, text: e.text, place: e.place, dwellMin: e.dwellMin || 0, legToNext: e.legToNext || null })),
     link: $("link").value,
     trafficH: $("traffic-h").value,
     trafficM: $("traffic-m").value,
     trafficIncludesStops: $("traffic-includes-stops").checked,
-    planLegSeconds: state.planLegSeconds,
   };
 }
 
@@ -141,19 +127,29 @@ function restoreRouteInput() {
   applyRouteSnapshot(snap);
 }
 
+// Accepts the current shape ({stops}) and the older one ({origin, waypoints,
+// destination}) so saved state and old share links keep working.
 function applyRouteSnapshot(snap) {
-  $("waypoints").innerHTML = "";
-  state.places = { origin: null, destination: null, waypoints: [], dwellMin: [] };
-  $("origin").value = snap.originText || "";
-  state.places.origin = snap.origin || null;
-  $("destination").value = snap.destinationText || "";
-  state.places.destination = snap.destination || null;
-  for (const w of snap.waypoints || []) addWaypointRow(w.place, w.text, w.dwellMin);
+  let stops;
+  if (Array.isArray(snap.stops)) {
+    stops = snap.stops.map((e) => ({ id: e.id, text: e.text || "", place: e.place || null, dwellMin: parseFloat(e.dwellMin) || 0, legToNext: e.legToNext || null }));
+  } else {
+    stops = [
+      { text: snap.originText || "", place: snap.origin || null, dwellMin: 0 },
+      ...(snap.waypoints || []).map((w) => ({ text: w.text || "", place: w.place || null, dwellMin: parseFloat(w.dwellMin) || 0 })),
+      { text: snap.destinationText || "", place: snap.destination || null, dwellMin: 0 },
+    ];
+    // Older saves kept per-leg ABRP times as one array in route order.
+    if (Array.isArray(snap.planLegSeconds) && snap.planLegSeconds.length === stops.length - 1) {
+      stops.forEach((e, i) => { e.id = newId(); });
+      stops.forEach((e, i) => { if (i < stops.length - 1 && snap.planLegSeconds[i] != null) e.legToNext = { to: stops[i + 1].id, seconds: snap.planLegSeconds[i] }; });
+    }
+  }
+  renderStopRows(stops);
   $("link").value = snap.link || "";
   $("traffic-h").value = snap.trafficH || "";
   $("traffic-m").value = snap.trafficM || "";
   $("traffic-includes-stops").checked = !!snap.trafficIncludesStops;
-  state.planLegSeconds = Array.isArray(snap.planLegSeconds) ? snap.planLegSeconds : null;
   if (snap.mode && snap.mode !== "ab") {
     const btn = document.querySelector(`[role="tab"][data-tab="${snap.mode}"]`);
     if (btn) btn.click();
@@ -307,28 +303,79 @@ function attachSuggest(input, list, onPick) {
   input.addEventListener("blur", () => setTimeout(close, 150));
 }
 
-function addWaypointRow(prefill, text, dwellMin) {
-  const wrap = $("waypoints");
-  const idx = state.places.waypoints.length;
-  state.places.waypoints.push(prefill || null);
-  state.places.dwellMin.push(parseFloat(dwellMin) || 0);
+// ---------------------------------------------------------------- the stop list
+//
+// One ordered list of rows: the first is the start, the last the end, the
+// rest are stops. Every row is the same component; its role (placeholder,
+// location button, minutes box, remove button) is derived from position, so
+// dragging any row anywhere just works. Each row carries its entry
+// { text, place, dwellMin }; the DOM order is the route order.
+
+function stopRows() { return [...$("stops").querySelectorAll(".stop-row")]; }
+function stopEntries() { return stopRows().map((r) => r._entry); }
+
+function newId() { return Math.random().toString(36).slice(2, 10); }
+
+function renderStopRows(entries) {
+  const list = (entries || []).map((e) => ({ id: e.id || newId(), text: e.text || "", place: e.place || null, dwellMin: e.dwellMin || 0, legToNext: e.legToNext || null }));
+  while (list.length < 2) list.push({ id: newId(), text: "", place: null, dwellMin: 0, legToNext: null });
+  $("stops").innerHTML = "";
+  for (const e of list) $("stops").appendChild(makeStopRow(e));
+  refreshStopRoles();
+}
+
+function addStopRow() {
+  const rows = stopRows();
+  const row = makeStopRow({ id: newId(), text: "", place: null, dwellMin: 0, legToNext: null });
+  $("stops").insertBefore(row, rows[rows.length - 1]); // before the end
+  refreshStopRoles();
+  row.querySelector("input.place").focus();
+  saveRouteInput();
+}
+
+function makeStopRow(entry) {
   const row = document.createElement("div");
-  row.className = "field suggest";
-  row.dataset.idx = idx;
-  row.innerHTML = `<label>Via</label><div class="row tight">
-      <span class="handle" tabindex="0" role="button" title="Drag to reorder (or use the arrow keys)" aria-label="Reorder stop">⋮⋮</span>
-      <input type="text" placeholder="Optional stop" autocomplete="off">
-      <input type="number" class="dwell" min="0" max="600" step="5" placeholder="0" inputmode="numeric" title="Minutes at this stop" aria-label="Minutes at this stop"><span class="unit">min</span>
-      <button class="btn icon remove" title="Remove" aria-label="Remove stop">×</button>
-    </div><ul hidden></ul>`;
-  const input = row.querySelector("input[type=text]"), list = row.querySelector("ul"), dwell = row.querySelector("input.dwell");
-  input.value = text ?? (prefill ? prefill.name : "");
-  if (dwellMin) dwell.value = dwellMin;
-  attachSuggest(input, list, (p) => { state.places.waypoints[idx] = p; });
-  dwell.addEventListener("change", () => { state.places.dwellMin[idx] = Math.max(0, parseFloat(dwell.value) || 0); saveRouteInput(); });
-  row.querySelector("button.remove").addEventListener("click", () => { state.places.waypoints[idx] = undefined; state.planLegSeconds = null; row.remove(); saveRouteInput(); });
-  attachDragHandle(row, row.querySelector(".handle"));
-  wrap.appendChild(row);
+  row.className = "stop-row";
+  row._entry = entry;
+  row.innerHTML = `
+    <span class="gutter" tabindex="0" role="button" title="Drag to reorder (or use the arrow keys)" aria-label="Reorder"><span class="glyph"></span></span>
+    <div class="suggest">
+      <div class="row tight">
+        <input type="text" class="place" autocomplete="off">
+        <button class="btn icon locate" type="button" title="Use my location" aria-label="Use my location">◎</button>
+        <input type="number" class="dwell" min="0" max="600" step="5" placeholder="0" inputmode="numeric" title="Minutes at this stop" aria-label="Minutes at this stop"><span class="unit">min</span>
+        <button class="btn icon remove" type="button" title="Remove" aria-label="Remove stop">×</button>
+      </div>
+      <ul hidden></ul>
+    </div>`;
+  const input = row.querySelector("input.place"), list = row.querySelector("ul"), dwell = row.querySelector("input.dwell");
+  input.value = entry.text || (entry.place ? entry.place.name : "");
+  if (entry.dwellMin) dwell.value = entry.dwellMin;
+  attachSuggest(input, list, (p) => {
+    entry.place = p;
+    if (p) entry.text = p.name;
+    if (row === stopRows()[0]) updateDepartureZoneNote();
+  });
+  input.addEventListener("input", () => { entry.text = input.value; });
+  dwell.addEventListener("change", () => { entry.dwellMin = Math.max(0, parseFloat(dwell.value) || 0); saveRouteInput(); });
+  row.querySelector("button.remove").addEventListener("click", () => {
+    if (stopRows().length <= 2) return;
+    row.remove(); refreshStopRoles(); saveRouteInput(); updateDepartureZoneNote();
+  });
+  row.querySelector("button.locate").addEventListener("click", useMyLocation);
+  attachDragHandle(row, row.querySelector(".gutter"));
+  return row;
+}
+
+// Placeholder and controls follow position: only the first row gets the
+// location button, only middle rows get minutes and remove.
+function refreshStopRoles() {
+  const rows = stopRows();
+  rows.forEach((row, i) => {
+    const role = i === 0 ? "start" : i === rows.length - 1 ? "end" : "via";
+    row.dataset.role = role;
+    row.querySelector("input.place").placeholder = role === "start" ? "Start" : role === "end" ? "Destination" : "Stop";
+  });
 }
 
 // Route order is the rows' DOM order, so reordering is moving the row.
@@ -336,8 +383,8 @@ function addWaypointRow(prefill, text, dwellMin) {
 // The lifted row follows the pointer; the DOM reorders as it crosses the
 // midpoint of a neighbour, and the transform is re-based so it doesn't jump.
 function attachDragHandle(row, handle) {
-  const wrap = $("waypoints");
-  const finish = () => { state.planLegSeconds = null; saveRouteInput(); };
+  const wrap = $("stops");
+  const finish = () => { refreshStopRoles(); saveRouteInput(); updateDepartureZoneNote(); };
   handle.addEventListener("pointerdown", (e) => {
     if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
@@ -346,10 +393,9 @@ function attachDragHandle(row, handle) {
     const naturalTop = () => row.getBoundingClientRect().top - translate;
     const grabOffset = e.clientY - naturalTop();
     const setTranslate = (v) => { translate = v; row.style.transform = `translateY(${v}px)`; };
-
     const move = (ev) => {
       setTranslate(ev.clientY - grabOffset - naturalTop());
-      for (const other of wrap.querySelectorAll(".field")) {
+      for (const other of wrap.querySelectorAll(".stop-row")) {
         if (other === row) continue;
         const r = other.getBoundingClientRect();
         const mid = r.top + r.height / 2;
@@ -357,8 +403,8 @@ function attachDragHandle(row, handle) {
         if (otherIsBelow && ev.clientY > mid) wrap.insertBefore(other, row);
         else if (!otherIsBelow && ev.clientY < mid) wrap.insertBefore(row, other);
         else continue;
-        // The row's natural position changed under it: re-base so it stays put.
         setTranslate(ev.clientY - grabOffset - naturalTop());
+        refreshStopRoles();
       }
     };
     const up = () => {
@@ -369,13 +415,12 @@ function attachDragHandle(row, handle) {
       row.style.transform = "";
       finish();
     };
-    // Listen on the window, not the handle: moving the row in the DOM can
-    // drop pointer capture, and the pointer is rarely over the handle on release.
+    // Window listeners: moving the row in the DOM can drop pointer capture,
+    // and the pointer is rarely over the handle on release.
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
   });
-  // Keyboard: arrow keys on the focused handle move the stop.
   handle.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
@@ -388,7 +433,7 @@ function attachDragHandle(row, handle) {
 }
 
 async function useMyLocation() {
-  const btn = $("use-location");
+  const btn = stopRows()[0].querySelector("button.locate");
   if (!navigator.geolocation) return setStatus("Geolocation isn't available in this browser.", true);
   if (!window.isSecureContext) return setStatus("Location needs HTTPS or localhost. Type your origin instead.", true);
   btn.disabled = true;
@@ -396,16 +441,13 @@ async function useMyLocation() {
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       const { longitude: lng, latitude: lat } = pos.coords;
-      try {
-        const p = await reverse(lng, lat);
-        state.places.origin = p;
-        $("origin").value = p.name;
-        setStatus(`Starting from ${p.name}`);
-      } catch {
-        state.places.origin = { name: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, lng, lat };
-        $("origin").value = state.places.origin.name;
-        setStatus("");
-      }
+      const first = stopRows()[0];
+      let p;
+      try { p = await reverse(lng, lat); setStatus(`Starting from ${p.name}`); }
+      catch { p = { name: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, lng, lat }; setStatus(""); }
+      first._entry.place = p;
+      first._entry.text = p.name;
+      first.querySelector("input.place").value = p.name;
       saveRouteInput();
       updateDepartureZoneNote();
       btn.disabled = false;
@@ -429,8 +471,9 @@ function readDeparture(originTz) {
 // The origin as a place with coordinates: the picked place, or the typed text
 // geocoded now (once), so its zone is known before the departure is read.
 async function resolveOrigin() {
-  if (state.places.origin && typeof state.places.origin.lng === "number") return state.places.origin;
-  const text = $("origin").value.trim();
+  const first = stopEntries()[0];
+  if (first && first.place && typeof first.place.lng === "number") return first.place;
+  const text = (first && first.text || "").trim();
   if (!text) return null;
   const hit = await geocodeOne(text);
   return { ...hit, name: text };
@@ -440,7 +483,8 @@ async function resolveOrigin() {
 async function updateDepartureZoneNote() {
   const el = $("departure-tz");
   const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const o = state.places.origin;
+  const first = stopEntries()[0];
+  const o = first && first.place;
   if (!o || typeof o.lng !== "number") { el.hidden = true; return; }
   const tz = await tzAt(o.lng, o.lat);
   if (tz === localTz) { el.hidden = true; return; }
@@ -467,18 +511,13 @@ async function importLink() {
   }
   const { places, departure } = parseLink(url);
 
-  state.planLegSeconds = null;
   return fillForm(places, places.slice(1, -1).map((p) => defaultDwellMinutes(p) || ""), departure, "link");
 }
 
 // Empty every route input: from, stops, to, the pasted link, the chosen file,
 // the drive-time override and any per-leg times from an export.
 function clearRouteInputs() {
-  $("waypoints").innerHTML = "";
-  state.places = { origin: null, destination: null, waypoints: [], dwellMin: [] };
-  state.planLegSeconds = null;
-  $("origin").value = "";
-  $("destination").value = "";
+  renderStopRows([]);
   $("link").value = "";
   $("file").value = "";
   $("traffic-h").value = "";
@@ -496,19 +535,11 @@ function clearRouteInputs() {
 // Put a list of places into the A -> B form. places[0] / last may be null
 // (unknown start / end). dwellMins lines up with the intermediate stops.
 function fillForm(places, dwellMins, departure, sourceWord) {
-  $("waypoints").innerHTML = "";
-  state.places = { origin: null, destination: null, waypoints: [], dwellMin: [] };
-
-  const setField = (id, key, p) => {
-    if (p && typeof p.lng === "number") { state.places[key] = p; $(id).value = p.name; }
-    else { state.places[key] = null; $(id).value = p ? p.query || p.name : ""; }
-  };
-  setField("origin", "origin", places[0]);
-  setField("destination", "destination", places[places.length - 1]);
-  places.slice(1, -1).forEach((p, i) => {
-    const pick = typeof p.lng === "number" ? p : null;
-    addWaypointRow(pick, pick ? undefined : p.query || p.name, dwellMins[i] || "");
-  });
+  renderStopRows(places.map((p, i) => {
+    const isEnd = i === 0 || i === places.length - 1;
+    const picked = p && typeof p.lng === "number" ? p : null;
+    return { text: p ? (picked ? p.name : p.query || p.name) : "", place: picked, dwellMin: isEnd ? 0 : parseFloat(dwellMins[i - 1]) || 0 };
+  }));
   if (departure) {
     // An absolute instant from a link: show it as wall-clock time at the
     // origin when the origin's zone is known, else in the device's zone.
@@ -549,8 +580,12 @@ async function importAbrp(fileOrBuffer) {
     saveDeparture($("departure").value);
     setStatus(`${$("status").textContent} Departure ${fmtClock(dep)} taken from the ABRP export.`);
   }
-  state.planLegSeconds = plan.stops.slice(0, -1).map((s) => s.driveSecondsToNext);
-  if (state.planLegSeconds.some((s) => s === null)) state.planLegSeconds = null;
+  // Each ABRP leg time rides with the pair of stops it belongs to, so it
+  // survives reordering and applies again whenever that pair is adjacent.
+  const entries = stopEntries();
+  plan.stops.forEach((s, i) => {
+    if (i < entries.length - 1 && s.driveSecondsToNext != null) entries[i].legToNext = { to: entries[i + 1].id, seconds: s.driveSecondsToNext };
+  });
   saveRouteInput();
   renderPlanSummary(plan);
   return waiting;
@@ -650,21 +685,26 @@ async function buildRoute() {
     } catch (e) { showFieldError("file-error", e.message); throw e; }
   }
   const o = await resolveOrigin();
-  const d = state.places.destination || ($("destination").value.trim() ? { query: $("destination").value.trim() } : null);
+  const entries = stopEntries();
+  const last = entries[entries.length - 1];
+  const d = last && (last.place && typeof last.place.lng === "number" ? last.place : last.text.trim() ? { query: last.text.trim(), name: last.text.trim() } : null);
   if (!o || !d) throw new Error("Enter where you're starting and where you're going.");
   const originTz = await tzAt(o.lng, o.lat);
   const departure = readDeparture(originTz);
-  // Stops come from their rows in order: a picked place if there is one,
-  // otherwise the typed text to geocode on submit, same as From and To.
+  // Middle rows are stops: a picked place if there is one, otherwise the
+  // typed text to geocode on submit. Minutes count only on middle rows.
   const vias = [];
-  for (const row of document.querySelectorAll("#waypoints .field")) {
-    const idx = Number(row.dataset.idx);
-    const text = row.querySelector("input[type=text]").value.trim();
-    const picked = state.places.waypoints[idx];
-    const place = picked || (text ? { query: text, name: text } : null);
+  const used = [entries[0]];
+  for (const e of entries.slice(1, -1)) {
+    const place = e.place && typeof e.place.lng === "number" ? e.place : e.text.trim() ? { query: e.text.trim(), name: e.text.trim() } : null;
     if (!place) continue;
-    vias.push({ ...place, dwellSeconds: (state.places.dwellMin[idx] || 0) * 60 });
+    vias.push({ ...place, dwellSeconds: (e.dwellMin || 0) * 60 });
+    used.push(e);
   }
+  used.push(last);
+  // ABRP leg times apply wherever the pair they belong to is still adjacent.
+  const planLegs = used.slice(0, -1).map((e, i) => (e.legToNext && e.legToNext.to === used[i + 1].id ? e.legToNext.seconds : null));
+  state.planLegs = planLegs.some((v) => v != null) ? planLegs : null;
   return fromPlaces([o, ...vias, d], departure);
 }
 
@@ -688,17 +728,23 @@ function applyTrafficTime(route) {
   route.timeScale = 1; route.legScales = null;
   if (!route.driveSeconds || route.provider === "file") return;
 
-  const plan = state.planLegSeconds;
-  if (plan && plan.length === route.legSeconds.length && route.legSeconds.every((s) => s > 0)) {
-    const scales = plan.map((s, i) => s / route.legSeconds[i]);
-    if (scales.every((k) => k >= 0.4 && k <= 3)) {
-      const planDrive = plan.reduce((a, s) => a + s, 0);
+  const plan = state.planLegs;
+  if (plan && plan.length === route.legSeconds.length) {
+    const scales = plan.map((sec, i) => {
+      if (sec == null || !(route.legSeconds[i] > 0)) return 1;
+      const k = sec / route.legSeconds[i];
+      return k >= 0.4 && k <= 3 ? k : 1;
+    });
+    if (scales.some((k) => k !== 1)) {
+      const legs = route.legSeconds.map((s, i) => s * scales[i]);
+      const drive = legs.reduce((a, s) => a + s, 0);
       route.legScales = scales;
-      route.timeScale = planDrive / route.driveSeconds;
-      route.totalSeconds = planDrive + (route.dwellSeconds || 0);
+      route.timeScale = drive / route.driveSeconds;
+      route.totalSeconds = drive + (route.dwellSeconds || 0);
       applyDwell(route.points, route.places, scales);
-      route.legSeconds = plan.slice();
-      route.timingNote = "leg times from ABRP";
+      route.legSeconds = legs;
+      const n = plan.filter((v) => v != null).length;
+      route.timingNote = n === plan.length ? "leg times from ABRP" : `${n} of ${plan.length} leg times from ABRP`;
       return;
     }
   }
@@ -776,6 +822,7 @@ async function renderRouteSummary(route) {
   if (dwell) parts.push(`${fmtDuration(dwell)} at stops`, `${fmtDuration(route.totalSeconds)} total`);
   parts.push(`arrive ${fmtDateTime(arrive, destTz)}${destTz !== localTz ? ` ${tzAbbrev(arrive, destTz)} (local there)` : ""}`);
   if (route.timingNote) parts.push(route.timingNote);
+  else if (route.provider === "osrm") parts.push("timed by the OSRM fallback, which runs slow on freeways; enter your Maps time above to correct it");
   el.textContent = parts.join(" · ");
   el.hidden = false;
   renderItinerary(itineraryFromRoute(route, zones, localTz));
@@ -1107,10 +1154,8 @@ async function boot() {
   initMap();
   bindTabs();
   bindFilters();
-  attachSuggest($("origin"), $("origin-suggest"), (p) => { state.places.origin = p; updateDepartureZoneNote(); });
-  attachSuggest($("destination"), $("destination-suggest"), (p) => { state.places.destination = p; });
-  $("add-waypoint").addEventListener("click", () => { addWaypointRow(); saveRouteInput(); });
-  $("use-location").addEventListener("click", useMyLocation);
+  renderStopRows([]);
+  $("add-waypoint").addEventListener("click", addStopRow);
   $("link").addEventListener("input", saveRouteInput);
   // Import as soon as a link lands in the field, whether pasted or typed.
   // Errors show right under the field, where a user on a small screen is looking.
@@ -1134,8 +1179,6 @@ async function boot() {
       if (looksLikeXlsx(f.name, await f.slice(0, 4).arrayBuffer())) await importAbrp(f);
     } catch (e) { showFieldError("file-error", e.message); }
   });
-  // Editing stops by hand invalidates per-leg times from an export.
-  $("add-waypoint").addEventListener("click", () => { state.planLegSeconds = null; });
   const shared = applySharedPlan();
   if (!shared) restoreRouteInput();
   updateDepartureZoneNote();
@@ -1159,7 +1202,9 @@ async function boot() {
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "text") go(); });
   await loadDataset();
   // A shared link that carries a complete plan runs itself.
-  if (shared && state.filters.subtypes.length && ($("origin").value.trim() || state.places.origin) && ($("destination").value.trim() || state.places.destination)) go();
+  const ends = stopEntries();
+  const filled = (e) => e && (e.place || (e.text || "").trim());
+  if (shared && state.filters.subtypes.length && filled(ends[0]) && filled(ends[ends.length - 1])) go();
 }
 
 boot();

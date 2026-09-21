@@ -96,20 +96,40 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: v
 .suggest li:hover, .suggest li[aria-selected="true"] { background: var(--bg); }
 .suggest li .kind { color: var(--muted); font-size: 12px; margin-left: 6px; }
 
-.waypoints .row { margin-bottom: 6px; }
-.waypoints input.dwell { width: 64px; flex: 0 0 auto; padding: 8px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
-.waypoints .unit { font-size: 12.5px; color: var(--muted); flex: 0 0 auto; }
-.waypoints .handle {
-  flex: 0 0 auto; align-self: stretch; display: inline-flex; align-items: center; padding: 0 4px;
-  color: var(--muted); font-size: 14px; letter-spacing: -3px; cursor: grab; touch-action: none; user-select: none;
-  border-radius: var(--radius);
+/* The stop list: a gutter of glyphs joined by a dotted line, one row per place. */
+.stops { margin-bottom: 8px; }
+.stop-row { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 6px; align-items: center; position: relative; padding: 3px 0; }
+.stop-row .gutter {
+  position: relative; align-self: stretch; display: flex; align-items: center; justify-content: center;
+  cursor: grab; touch-action: none; user-select: none; border-radius: var(--radius);
 }
-.waypoints .handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.waypoints .field { position: relative; }
-.waypoints .field.dragging { opacity: .9; z-index: 5; }
-.waypoints .field.dragging > .row { box-shadow: 0 6px 18px rgba(0,0,0,.18); background: var(--panel); border-radius: var(--radius); }
-.waypoints .field.dragging .handle { cursor: grabbing; }
-.waypoints .field:not(.dragging) { transition: transform .12s ease; }
+.stop-row .gutter:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* connector: a dotted line running through the gutter, clipped at the ends */
+.stop-row .gutter::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; border-left: 2px dotted var(--pin-muted); transform: translateX(-1px); }
+.stop-row[data-role="start"] .gutter::before { top: 50%; }
+.stop-row[data-role="end"] .gutter::before { bottom: 50%; }
+.stop-row .glyph { position: relative; z-index: 1; width: 10px; height: 10px; border-radius: 50%; background: var(--panel); border: 2px solid var(--ink); }
+.stop-row[data-role="via"] .glyph { width: 7px; height: 7px; background: var(--muted); border-color: var(--muted); }
+.stop-row[data-role="end"] .glyph {
+  width: 12px; height: 12px; background: var(--bad); border-color: var(--bad);
+  border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+}
+/* text box gets the same look as the other fields (it isn't inside .field) */
+.stop-row input.place { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+/* controls follow the row's role; selectors outrank the generic .row.tight > .btn.icon rule */
+.stop-row .row.tight > .btn.locate, .stop-row .row.tight > .btn.remove,
+.stop-row .row.tight > input.dwell, .stop-row .row.tight > .unit { display: none; }
+.stop-row[data-role="start"] .row.tight > .btn.locate { display: inline-flex; }
+.stop-row[data-role="via"] .row.tight > input.dwell { display: inline-block; }
+.stop-row[data-role="via"] .row.tight > .unit { display: inline-flex; }
+.stop-row[data-role="via"] .row.tight > .btn.remove { display: inline-flex; }
+.stop-row input.dwell { width: 64px; flex: 0 0 auto; padding: 8px 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.stop-row .unit { font-size: 12.5px; color: var(--muted); flex: 0 0 auto; align-items: center; }
+.stop-row .suggest .row.tight > input.place { flex: 1 1 0; min-width: 0; }
+.stop-row.dragging { opacity: .92; z-index: 5; }
+.stop-row.dragging > .suggest > .row { box-shadow: 0 6px 18px rgba(0,0,0,.18); background: var(--panel); border-radius: var(--radius); }
+.stop-row.dragging .gutter { cursor: grabbing; }
+.stop-row:not(.dragging) { transition: transform .12s ease; }
 .duration input[type="number"] { width: 72px; flex: 0 0 auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
 .duration span { color: var(--muted); font-size: 13px; }
 

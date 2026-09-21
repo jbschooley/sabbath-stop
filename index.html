@@ -17,10 +17,10 @@
   <link rel="icon" href="brand/exit-sign.svg" type="image/svg+xml">
   <link rel="icon" href="brand/icon-32.png" sizes="32x32" type="image/png">
   <!-- iOS home-screen icons: solid background, since iOS paints transparency black -->
-  <link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon-180.png?v=2026092037">
-  <link rel="apple-touch-icon" sizes="167x167" href="brand/apple-touch-icon-167.png?v=2026092037">
-  <link rel="apple-touch-icon" sizes="152x152" href="brand/apple-touch-icon-152.png?v=2026092037">
-  <link rel="apple-touch-icon" sizes="120x120" href="brand/apple-touch-icon-120.png?v=2026092037">
+  <link rel="apple-touch-icon" sizes="180x180" href="brand/apple-touch-icon-180.png?v=2026092043">
+  <link rel="apple-touch-icon" sizes="167x167" href="brand/apple-touch-icon-167.png?v=2026092043">
+  <link rel="apple-touch-icon" sizes="152x152" href="brand/apple-touch-icon-152.png?v=2026092043">
+  <link rel="apple-touch-icon" sizes="120x120" href="brand/apple-touch-icon-120.png?v=2026092043">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Sabbath Stop">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/app.css?v=2026092037">
+  <link rel="stylesheet" href="css/app.css?v=2026092043">
   <!-- Cache busting without a build step. GitHub Pages serves everything with
        max-age=600, so a device that opened the app minutes before a deploy keeps
        running the old scripts. Bump the version on every deploy; the import
@@ -36,14 +36,14 @@
   <script type="importmap">
   {
     "imports": {
-      "./js/abrp.js":      "./js/abrp.js?v=2026092037",
-      "./js/finder.js":    "./js/finder.js?v=2026092037",
-      "./js/geo.js":       "./js/geo.js?v=2026092037",
-      "./js/geocode.js":   "./js/geocode.js?v=2026092037",
-      "./js/providers.js": "./js/providers.js?v=2026092037",
-      "./js/routing.js":   "./js/routing.js?v=2026092037",
-      "./js/share.js":     "./js/share.js?v=2026092037",
-      "./js/tz.js":        "./js/tz.js?v=2026092037"
+      "./js/abrp.js":      "./js/abrp.js?v=2026092043",
+      "./js/finder.js":    "./js/finder.js?v=2026092043",
+      "./js/geo.js":       "./js/geo.js?v=2026092043",
+      "./js/geocode.js":   "./js/geocode.js?v=2026092043",
+      "./js/providers.js": "./js/providers.js?v=2026092043",
+      "./js/routing.js":   "./js/routing.js?v=2026092043",
+      "./js/share.js":     "./js/share.js?v=2026092043",
+      "./js/tz.js":        "./js/tz.js?v=2026092043"
     }
   }
   </script>
@@ -86,25 +86,12 @@
     </div>
 
     <div class="tab active" id="tab-ab">
-      <div class="field suggest">
-        <label for="origin">From</label>
-        <div class="row tight">
-          <input id="origin" type="text" placeholder="City, address, or place" autocomplete="off">
-          <button class="btn icon" id="use-location" title="Use my location" aria-label="Use my location">◎</button>
-        </div>
-        <ul id="origin-suggest" hidden></ul>
-      </div>
-      <div class="waypoints" id="waypoints"></div>
-      <div class="field suggest">
-        <label for="destination">To</label>
-        <input id="destination" type="text" placeholder="City, address, or place" autocomplete="off">
-        <ul id="destination-suggest" hidden></ul>
-      </div>
+      <div class="stops" id="stops"></div>
       <div class="row tight">
         <button class="btn small" id="add-waypoint">+ Add a stop</button>
         <button class="btn small" id="clear-route" type="button">Clear route</button>
       </div>
-      <p class="hint info">Each stop can carry a dwell time, so a 40-minute charge pushes every later arrival back 40 minutes.</p>
+      <p class="hint info">Drag the marker at the left of any row to reorder. The first row is where you start and the last is where you end; the rows between are stops, and each can carry a dwell time so a 40-minute charge pushes every later arrival back 40 minutes. A stop dragged to either end keeps its minutes but they don't count until it's a stop again.</p>
     </div>
 
     <div class="tab" id="tab-link">
@@ -182,6 +169,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
-<script type="module" src="js/main.js?v=2026092037"></script>
+<script type="module" src="js/main.js?v=2026092043"></script>
 </body>
 </html>
