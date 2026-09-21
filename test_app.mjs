@@ -7,7 +7,7 @@ import { decodePolyline, haversineMi, tileKey, tilesForBbox, bufferBbox, VertexB
 import { meetingStartInstant, zonedToInstant, tzOffsetMinutes, defaultDepartureLocal, weekdayIn, wallClockValue, instantFromWallClock, tzAbbrev, generalConferenceDays, isGeneralConference } from "./js/tz.js";
 import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exitVertices, batchAlongRoute, DEFAULT_FILTERS, leaveBy, reapply } from "./js/finder.js";
 import { dwellBefore, applyDwell } from "./js/routing.js";
-import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
+import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, stopNameDetail, pickCharger, isUnresolvableName, readZipEntry } from "./js/abrp.js";
 import { deflateRawSync } from "node:zlib";
 import { inputsKey, serializePlan, revivePlan, shiftPlan, savePlan, loadPlan, planStore } from "./js/plan.js";
 import { encodeShare, decodeShare, sharePayloadFrom, shareUrl } from "./js/share.js";
@@ -584,6 +584,34 @@ test("cleanStopName strips bracketed tags; isUnresolvableName spots placeholders
   assert.equal(cleanStopName("Tesla Supercharger Yermo, CA - Sunrise Canyon Rd [Tesla]"), "Tesla Supercharger Yermo, CA");
   assert.equal(cleanStopName("Tesla Supercharger Moapa, NV [Tesla]"), "Tesla Supercharger Moapa, NV");
   assert.equal(cleanStopName("1924 Colina Salida del Sol, San Clemente, CA"), "1924 Colina Salida del Sol, San Clemente, CA");
+  assert.equal(stopNameDetail("Tesla Supercharger Beaver, UT - 525 W [Tesla]"), "525 W");
+  assert.equal(stopNameDetail("Tesla Supercharger Yermo, CA - Sunrise Canyon Rd [Tesla]"), "Sunrise Canyon Rd");
+  assert.equal(stopNameDetail("Tesla Supercharger Moapa, NV [Tesla]"), null);
+});
+
+test("pickCharger chooses among a city's chargers by ABRP's street fragment", () => {
+  // Photon's real answers for "Tesla Supercharger Las Vegas, NV" and Barstow.
+  const lv = [
+    "Tesla Supercharger, 6509 South Las Vegas Boulevard, Las Vegas, Nevada",
+    "Tesla Supercharger, 3545 South Las Vegas Boulevard, Paradise, Nevada",
+    "Tesla Supercharger, 7860 West Tropical Parkway, Las Vegas, Nevada",
+    "Tesla Supercharger, 2208 South Nellis Boulevard, Las Vegas, Nevada",
+    "Tesla Supercharger, 500 East Windmill Lane, Las Vegas, Nevada",
+  ].map((name) => ({ name, kind: "amenity:charging_station" }));
+  assert.equal(pickCharger("Tropical Pkwy", lv).name, lv[2].name);
+  assert.equal(pickCharger("3545 S Las Vegas Blvd", lv).name, lv[1].name, "house number beats the shared street words");
+  assert.equal(pickCharger("Nellis", lv).name, lv[3].name);
+  assert.equal(pickCharger("Windmill Ln", lv).name, lv[4].name);
+  assert.equal(pickCharger("Some Unknown Rd", lv).name, lv[0].name, "no match: first hit");
+  assert.equal(pickCharger(null, lv).name, lv[0].name);
+  assert.equal(pickCharger("x", []), null);
+  const barstow = [
+    "Tesla Supercharger, 1503 East Main Street, Barstow, California",
+    "Tesla Supercharger, 2812 Lenwood Road, Barstow, California",
+    "Tesla Supercharger - Barstow, CA - Tanger Way, 2796 Tanger Way, Barstow, California",
+  ].map((name) => ({ name, kind: "amenity:charging_station" }));
+  assert.equal(pickCharger("Lenwood Rd", barstow).name, barstow[1].name);
+  assert.equal(pickCharger("Tanger Way", barstow).name, barstow[2].name);
   assert.ok(isUnresolvableName("Home") && isUnresolvableName("Point on map") && !isUnresolvableName("Provo, UT"));
 });
 

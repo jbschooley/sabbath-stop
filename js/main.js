@@ -6,6 +6,7 @@ import { debounce, geocodeOne, reverse, suggest } from "./geocode.js";
 import { isUnresolvableName, looksLikeXlsx, parseAbrpXlsx } from "./abrp.js";
 import { bufferBbox, haversineMi, tilesForBbox } from "./geo.js";
 import { defaultDwellMinutes, fromPlaces, fromTrackFile, looksLikeAbrpFile, parseLink } from "./providers.js";
+import { pickCharger } from "./abrp.js";
 import { applyDwell, dwellBefore, matrix, routePlaces } from "./routing.js";
 import { decodeShare, sharePayloadFrom, shareUrl } from "./share.js";
 import { defaultDepartureLocal, fmtDateTime, fmtHHMM, fmtTime, instantFromWallClock, isGeneralConference, toDatetimeLocal, tzAbbrev, wallClockValue } from "./tz.js";
@@ -641,7 +642,17 @@ function fillForm(places, dwellMins, departure, sourceWord) {
 async function importAbrp(fileOrBuffer) {
   const buf = fileOrBuffer instanceof ArrayBuffer ? fileOrBuffer : await fileOrBuffer.arrayBuffer();
   const plan = await parseAbrpXlsx(buf);
-  const places = plan.stops.map((s) => (isUnresolvableName(s.rawName) ? null : { query: s.name, name: s.name }));
+  // A charger's city can have several; ABRP's street fragment picks among
+  // the geocoder's hits. Resolved here so the row shows which one it chose.
+  const places = await Promise.all(plan.stops.map(async (s) => {
+    if (isUnresolvableName(s.rawName)) return null;
+    if (!s.detail) return { query: s.name, name: s.name };
+    try {
+      const hits = (await suggest(s.name, { limit: 12 })).filter((h) => /charging_station/.test(h.kind || "") || h.name.toLowerCase().startsWith(s.name.split(" ")[0].toLowerCase()));
+      const hit = pickCharger(s.detail, hits);
+      return hit ? { ...hit, name: hit.name } : { query: s.name, name: s.name };
+    } catch { return { query: s.name, name: s.name }; }
+  }));
   const dwellMins = plan.stops.slice(1, -1).map((s) => (s.dwellSeconds ? Math.round(s.dwellSeconds / 60) : ""));
   // ABRP gives a wall-clock departure at the origin but no date. Put that
   // clock straight into the picker on the date already there; the picker is

@@ -109,17 +109,46 @@ export function isUnresolvableName(name) {
 // "Tesla Supercharger Beaver, UT - 525 W [Tesla]" -> "Tesla Supercharger Beaver, UT".
 // The bracketed network tag and the " - street" fragment after the state
 // both send the geocoder to the wrong charger: with "525 W" left in, Photon
-// matched a different Supercharger 90 miles away.
+// matched a different Supercharger 90 miles away. The fragment is kept
+// separately (stopNameDetail) to choose among a city's chargers.
+const DETAIL_RE = /(,\s*[A-Z]{2})\s+-\s+(.*)$/;
 export function cleanStopName(name) {
   return (name || "")
     .replace(/\[[^\]]*\]/g, " ")
-    .replace(/(,\s*[A-Z]{2})\s+-\s+.*$/, "$1")
+    .replace(DETAIL_RE, "$1")
     .replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
+}
+export function stopNameDetail(name) {
+  const m = DETAIL_RE.exec((name || "").replace(/\[[^\]]*\]/g, " ").replace(/\s+/g, " "));
+  return m ? m[2].trim() || null : null;
+}
+
+// Among the chargers the geocoder found for a city, the one whose address
+// best matches ABRP's street fragment: a matching house number counts double,
+// each street word once; suffixes and compass letters are ignored. With no
+// match at all the first hit stands, which is the nearest to the map.
+const NOISE = new Set(["rd", "road", "st", "street", "ave", "avenue", "dr", "drive", "blvd", "boulevard", "hwy", "highway", "ln", "lane", "way", "pkwy", "parkway", "ct", "court", "pl", "n", "s", "e", "w", "north", "south", "east", "west", "the", "and"]);
+export function pickCharger(detail, hits) {
+  if (!hits.length) return null;
+  if (!detail) return hits[0];
+  const words = detail.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !NOISE.has(w));
+  const number = words.find((w) => /^\d+$/.test(w));
+  let best = hits[0], bestScore = 0;
+  for (const h of hits) {
+    const text = ` ${(h.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+    let score = 0;
+    for (const w of words) {
+      if (!text.includes(` ${w} `)) continue;
+      score += w === number ? 2 : 1;
+    }
+    if (score > bestScore) { best = h; bestScore = score; }
+  }
+  return best;
 }
 
 /**
  * @returns {{ planUrl: string|null,
- *             stops: [{ name, rawName, chargeSeconds, driveSecondsToNext, arrivalMin, departureMin }],
+ *             stops: [{ name, rawName, detail, chargeSeconds, driveSecondsToNext, arrivalMin, departureMin }],
  *             totalDriveSeconds, totalSeconds }}
  */
 export function parseAbrpRows(rows) {
@@ -153,6 +182,7 @@ export function parseAbrpRows(rows) {
     stops.push({
       rawName: a,
       name: cleanStopName(a),
+      detail: stopNameDetail(a),
       chargeSeconds,
       dwellSeconds,
       driveSecondsToNext: parseAbrpDuration(cDrive && r[cDrive]),
