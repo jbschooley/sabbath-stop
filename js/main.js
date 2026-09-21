@@ -87,11 +87,12 @@ async function shareCurrentPlan() {
     setStatus("Link copied. Anyone who opens it sees this plan and its results.");
   } catch {
     // Clipboard blocked: put the link in a selectable box instead.
+    // No focus()/select(): selecting a long value scrolls the panel sideways.
     const box = $("share-url");
     box.value = url;
     box.hidden = false;
-    box.focus();
-    box.select();
+    box.scrollLeft = 0;
+    document.querySelector(".panel").scrollLeft = 0;
     setStatus("Copy the link below.");
   }
 }
