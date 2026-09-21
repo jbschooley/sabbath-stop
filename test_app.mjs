@@ -11,7 +11,7 @@ import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseC
 import { deflateRawSync } from "node:zlib";
 import { encodeShare, decodeShare, sharePayloadFrom, shareUrl } from "./js/share.js";
 import { rankSuggestions } from "./js/geocode.js";
-import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes } from "./js/providers.js";
+import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes, googleWaypointCoords } from "./js/providers.js";
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -391,6 +391,20 @@ test("Google URL with coordinates yields lat/lng places", () => {
 });
 test("short Google links are refused with a helpful message", () => {
   assert.throws(() => parseGoogleUrl("https://maps.app.goo.gl/abc123"), /paste the full/);
+});
+
+test("Google link: a searched place takes its coordinates from the data blob", () => {
+  const u = "https://www.google.com/maps/dir/40.2969000,-111.6946000/Costa+Vida+Fresh+Mexican+Grill,+801+W+Main+St+Suite+101,+Boise,+ID+83702/@41.9,-116.6,998718m/data=!3m2!1e3!4b1!4m10!4m9!1m1!4e1!1m5!1m1!1s0x54aef8e4f1c19337:0xadcc49a814305482!2m2!1d-116.2038058!2d43.6154801!3e0?entry=ttu";
+  assert.deepEqual(googleWaypointCoords(u), [null, { lng: -116.2038058, lat: 43.6154801 }]);
+  const p = parseGoogleUrl(u);
+  assert.equal(p.length, 2);
+  assert.ok(Math.abs(p[0].lat - 40.2969) < 1e-6);
+  assert.equal(p[1].lng, -116.2038058);
+  assert.equal(p[1].lat, 43.6154801);
+  assert.match(p[1].name, /Costa Vida/);
+  // Two typed places and no blob: nothing to attach, names still geocode.
+  assert.deepEqual(googleWaypointCoords("https://www.google.com/maps/dir/A/B/"), []);
+  assert.equal("lng" in parseGoogleUrl("https://www.google.com/maps/dir/Provo,+UT/Boise,+ID/")[1], false);
 });
 test("Google depart-at time is read from the data blob, arrive-by is not", () => {
   const base = "https://www.google.com/maps/dir/Salt+Lake+City,+UT/St.+George,+UT/@38.5,-112.3,8z/data=!4m8!4m7!1m1!4e1!1m1!4e1!2m3!6e0!7e2!8j1790330400";

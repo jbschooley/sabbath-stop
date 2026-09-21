@@ -89,7 +89,54 @@ export function parseGoogleUrl(url) {
   });
   while (places.length && places[places.length - 1] === null) places.pop();
   if (places.length < 2) throw new Error("Need at least a destination and one more place in the link.");
+  // The data blob carries the coordinates Google resolved each place to. A
+  // business with a suite number geocodes poorly by name, so prefer those.
+  const coords = googleWaypointCoords(url);
+  if (coords.length === segs.length) {
+    places.forEach((p, i) => { if (p && !("lng" in p) && coords[i]) Object.assign(p, coords[i]); });
+  }
   return places;
+}
+
+// Google's data blob is a "!<field><type><value>" encoding of nested
+// messages: "4m10" opens a message holding the next 10 tokens. The
+// directions message is the "4m" whose children are one "1m" per waypoint,
+// in path order; a waypoint chosen from search carries "2m2!1d<lng>!2d<lat>",
+// while typed coordinates or "your location" carry only "!4e1" and give
+// null. Returns one entry per waypoint, or [] when the blob has none.
+export function googleWaypointCoords(url) {
+  const m = /[?&/]data=([^?&#]+)/.exec(url);
+  if (!m) return [];
+  const toks = m[1].split("!").filter(Boolean).map((t) => /^(\d+)([a-z])(.*)$/.exec(t)).filter(Boolean);
+  let pos = 0;
+  const parse = (count) => {
+    const out = [];
+    while (out.length < count && pos < toks.length) {
+      const [, field, type, value] = toks[pos++];
+      const node = { field: +field, type, value };
+      if (type === "m") node.children = parse(+value);
+      out.push(node);
+    }
+    return out;
+  };
+  const tree = parse(Infinity);
+  let best = [];
+  const walk = (nodes) => {
+    for (const n of nodes) {
+      if (n.type !== "m") continue;
+      if (n.field === 4 && n.children.length && n.children.every((c) => c.field === 1 && c.type === "m")) {
+        if (n.children.length > best.length) best = n.children;
+      }
+      walk(n.children);
+    }
+  };
+  walk(tree);
+  return best.map((wp) => {
+    const pt = wp.children.find((c) => c.field === 2 && c.type === "m");
+    const lng = pt && pt.children.find((c) => c.field === 1 && c.type === "d");
+    const lat = pt && pt.children.find((c) => c.field === 2 && c.type === "d");
+    return lng && lat ? { lng: parseFloat(lng.value), lat: parseFloat(lat.value) } : null;
+  });
 }
 
 // Google's expanded directions URLs carry a chosen time inside the data blob
