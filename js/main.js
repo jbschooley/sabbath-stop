@@ -7,6 +7,7 @@ import { isUnresolvableName, looksLikeXlsx, parseAbrpXlsx } from "./abrp.js";
 import { bufferBbox, haversineMi, tilesForBbox } from "./geo.js";
 import { defaultDwellMinutes, fromPlaces, fromTrackFile, looksLikeAbrpFile, parseLink } from "./providers.js";
 import { applyDwell, dwellBefore, matrix, routePlaces } from "./routing.js";
+import { decodeShare, sharePayloadFrom, shareUrl } from "./share.js";
 import { defaultDepartureLocal, fmtDateTime, fmtHHMM, fmtTime, instantFromWallClock, toDatetimeLocal, tzAbbrev, wallClockValue } from "./tz.js";
 
 const $ = (id) => document.getElementById(id);
@@ -53,32 +54,95 @@ function initialDepartureLocal() {
 // Origin, stops, destination, pasted link and which tab is active. Typed text
 // that never became a picked place is kept as text so it comes back as typed.
 function saveRouteInput() {
-  try {
-    const rows = [...document.querySelectorAll("#waypoints .field")];
-    const snap = {
-      mode: state.routeMode,
-      originText: $("origin").value,
-      origin: state.places.origin,
-      destinationText: $("destination").value,
-      destination: state.places.destination,
-      waypoints: rows.map((row) => ({
-        text: row.querySelector("input[type=text]").value,
-        place: state.places.waypoints[row.dataset.idx] || null,
-        dwellMin: row.querySelector("input.dwell").value,
-      })),
-      link: $("link").value,
-      trafficH: $("traffic-h").value,
-      trafficM: $("traffic-m").value,
-      trafficIncludesStops: $("traffic-includes-stops").checked,
-      planLegSeconds: state.planLegSeconds,
-    };
-    localStorage.setItem(ROUTE_INPUT_KEY, JSON.stringify(snap));
-  } catch { /* ignore */ }
+  try { localStorage.setItem(ROUTE_INPUT_KEY, JSON.stringify(routeSnapshot())); } catch { /* ignore */ }
 }
+
+// ---------------------------------------------------------------- sharing
+
+// Everything needed to reproduce this plan on another device.
+function sharePlan() {
+  const r = routeSnapshot();
+  return {
+    departure: $("departure").value,
+    route: {
+      originText: r.originText, origin: r.origin,
+      destinationText: r.destinationText, destination: r.destination,
+      waypoints: r.waypoints,
+      trafficH: r.trafficH, trafficM: r.trafficM, trafficIncludesStops: r.trafficIncludesStops,
+      planLegSeconds: r.planLegSeconds,
+    },
+    filters: state.filters,
+  };
+}
+
+async function shareCurrentPlan() {
+  const base = `${location.origin}${location.pathname}`;
+  const url = shareUrl(base, sharePlan());
+  const title = "Sabbath Stop plan";
+  if (navigator.share) {
+    try { await navigator.share({ title, url }); return; } catch (e) { if (e.name === "AbortError") return; }
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    setStatus("Link copied. Anyone who opens it sees this plan and its results.");
+  } catch {
+    // Clipboard blocked: put the link in a selectable box instead.
+    const box = $("share-url");
+    box.value = url;
+    box.hidden = false;
+    box.focus();
+    box.select();
+    setStatus("Copy the link below.");
+  }
+}
+
+// A shared link fills the form, applies the filters, and runs the search.
+// Returns true when a plan was applied.
+function applySharedPlan() {
+  const payload = sharePayloadFrom(location.hash);
+  if (!payload) return false;
+  let plan;
+  try { plan = decodeShare(payload); } catch { setStatus("That share link couldn't be read.", true); return false; }
+  if (plan.filters) { state.filters = { ...DEFAULT_FILTERS, ...plan.filters }; saveFilters(); }
+  if (plan.departure) { $("departure").value = plan.departure; saveDeparture(plan.departure); }
+  if (plan.route) { applyRouteSnapshot({ mode: "ab", ...plan.route }); saveRouteInput(); }
+  // Drop the fragment so later edits and reloads use the saved state, not the link.
+  history.replaceState(null, "", location.pathname + location.search);
+  setStatus("Plan loaded from a shared link.");
+  return true;
+}
+// The route part of the form as a plain object (what gets saved and shared).
+function routeSnapshot() {
+  const rows = [...document.querySelectorAll("#waypoints .field")];
+  return {
+    mode: state.routeMode,
+    originText: $("origin").value,
+    origin: state.places.origin,
+    destinationText: $("destination").value,
+    destination: state.places.destination,
+    waypoints: rows.map((row) => ({
+      text: row.querySelector("input[type=text]").value,
+      place: state.places.waypoints[row.dataset.idx] || null,
+      dwellMin: row.querySelector("input.dwell").value,
+    })),
+    link: $("link").value,
+    trafficH: $("traffic-h").value,
+    trafficM: $("traffic-m").value,
+    trafficIncludesStops: $("traffic-includes-stops").checked,
+    planLegSeconds: state.planLegSeconds,
+  };
+}
+
 function restoreRouteInput() {
   let snap = null;
   try { snap = JSON.parse(localStorage.getItem(ROUTE_INPUT_KEY) || "null"); } catch { /* ignore */ }
   if (!snap) return;
+  applyRouteSnapshot(snap);
+}
+
+function applyRouteSnapshot(snap) {
+  $("waypoints").innerHTML = "";
+  state.places = { origin: null, destination: null, waypoints: [], dwellMin: [] };
   $("origin").value = snap.originText || "";
   state.places.origin = snap.origin || null;
   $("destination").value = snap.destinationText || "";
@@ -156,7 +220,8 @@ function renderSubtypes() {
 
 // ---------------------------------------------------------------- filters UI
 
-function bindFilters() {
+// Push the filter values into their inputs (on boot and when a shared plan lands).
+function syncFilterInputs() {
   const f = state.filters;
   $("max-detour").value = f.maxDetourMin;
   $("window-min").value = f.windowMin;
@@ -167,6 +232,11 @@ function bindFilters() {
   $("hide-misses").checked = f.hideMissesOnMap !== false;
   $("sort").value = f.sort;
   $("window-row").style.opacity = f.wide ? 0.5 : 1;
+}
+
+function bindFilters() {
+  const f = state.filters;
+  syncFilterInputs();
 
   const onChange = () => {
     f.maxDetourMin = clamp(parseFloat($("max-detour").value) || 10, 1, 120);
@@ -966,7 +1036,7 @@ function escapeAttr(s) { return escapeHtml(s); }
 
 // ---------------------------------------------------------------- boot
 
-function boot() {
+async function boot() {
   $("departure").value = initialDepartureLocal();
   $("departure").addEventListener("change", () => saveDeparture($("departure").value));
   $("reset-departure").addEventListener("click", () => {
@@ -1007,9 +1077,20 @@ function boot() {
   });
   // Editing stops by hand invalidates per-leg times from an export.
   $("add-waypoint").addEventListener("click", () => { state.planLegSeconds = null; });
-  restoreRouteInput();
+  const shared = applySharedPlan();
+  if (!shared) restoreRouteInput();
   updateDepartureZoneNote();
   wireInfoHints();
+  $("share").addEventListener("click", shareCurrentPlan);
+  // A share link pasted into an already-open tab only changes the fragment,
+  // which never reloads the page: apply it here.
+  window.addEventListener("hashchange", () => {
+    if (!applySharedPlan()) return;
+    syncFilterInputs();
+    renderSubtypes();
+    updateDepartureZoneNote();
+    go();
+  });
   // iOS Safari ignores user-scalable=no; block pinch on the panel here. The
   // map keeps its own pinch handling.
   const panel = document.querySelector(".panel");
@@ -1017,7 +1098,9 @@ function boot() {
   panel.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   $("go").addEventListener("click", go);
   document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT" && e.target.type !== "text") go(); });
-  loadDataset();
+  await loadDataset();
+  // A shared link that carries a complete plan runs itself.
+  if (shared && state.filters.subtypes.length && ($("origin").value.trim() || state.places.origin) && ($("destination").value.trim() || state.places.destination)) go();
 }
 
 boot();

@@ -9,6 +9,7 @@ import { score, inWindow, sortCandidates, detourRadiusMiles, findCandidates, exi
 import { dwellBefore, applyDwell } from "./js/routing.js";
 import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
 import { deflateRawSync } from "node:zlib";
+import { encodeShare, decodeShare, sharePayloadFrom, shareUrl } from "./js/share.js";
 import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes } from "./js/providers.js";
 
 let passed = 0, failed = 0;
@@ -508,6 +509,31 @@ test("applyDwell with per-leg scales stretches each leg by its own factor", () =
   const pts = [{ t: 0, leg: 0 }, { t: 50, leg: 0 }, { t: 100, leg: 0 }, { t: 200, leg: 1 }, { t: 300, leg: 1 }];
   applyDwell(pts, places, [2, 0.5]);
   assert.deepEqual(pts.map((p) => p.t), [0, 100, 200, 200 + 50 + 600, 200 + 100 + 600]);
+});
+
+console.log("share");
+test("share links round-trip a plan, including non-ASCII names, and drop empties", () => {
+  const plan = {
+    departure: "2026-09-27T08:00",
+    route: { originText: "München, Bayern", origin: { name: "München", lng: 11.575, lat: 48.137 }, destinationText: "", waypoints: [{ text: "Tesla Supercharger Beaver, UT", dwellMin: "15" }] },
+    filters: { subtypes: ["YSA", "YSA_JR"], maxDetourMin: 30, wide: false, sort: "best" },
+  };
+  const url = shareUrl("https://sabbathstop.com/", plan);
+  assert.ok(url.startsWith("https://sabbathstop.com/#s="));
+  assert.doesNotMatch(url.split("#s=")[1], /[+/=]/, "base64url only, safe in chat and address bars");
+  const back = decodeShare(sharePayloadFrom(new URL(url).hash));
+  assert.equal(back.departure, "2026-09-27T08:00");
+  assert.equal(back.route.originText, "München, Bayern");
+  assert.equal(back.route.origin.lng, 11.575);
+  assert.equal(back.route.waypoints[0].dwellMin, "15");
+  assert.deepEqual(back.filters.subtypes, ["YSA", "YSA_JR"]);
+  assert.equal("destinationText" in back.route, false, "empty strings are dropped");
+  assert.equal("wide" in back.filters, false, "false is dropped and comes back as the default");
+});
+test("share: bad or missing fragments are rejected cleanly", () => {
+  assert.equal(sharePayloadFrom(""), null);
+  assert.equal(sharePayloadFrom("#other"), null);
+  assert.throws(() => decodeShare(encodeShare({ v: 99 }).replace(/./, "A")), Error);
 });
 
 console.log(failed ? `\n${failed} FAILED, ${passed} passed` : `\nall ${passed} tests passed`);

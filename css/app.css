@@ -138,6 +138,7 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 13px; ma
 .toggle { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 14px; }
 
 .status { font-size: 13px; color: var(--muted); min-height: 18px; margin: 8px 0; }
+.share-url { width: 100%; margin-top: 6px; padding: 6px 8px; font-size: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
 .status.err { color: var(--bad); }
 
 .summary { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
