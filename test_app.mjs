@@ -294,6 +294,51 @@ await atest("findCandidates: a unit that meets on Friday fits a Friday arrival",
   assert.equal(mid.passes, true);
 });
 
+// The real shape of the Gulf: Doha's wards meet on Friday, and the weekday
+// must be judged in Asia/Qatar, not the traveller's zone.
+function qatarFixture(departure) {
+  const points = [];
+  for (let i = 0; i <= 100; i++) points.push({ lng: 51 + i * 0.01, lat: 25.33, t: i * 36, d: i * 0.39, leg: 0 });
+  const route = {
+    departure, points, bbox: [51, 25.33, 52, 25.33], driveSeconds: 3600, dwellSeconds: 0, totalSeconds: 3600, timeScale: 1, totalMiles: 39,
+    places: [{ name: "Al Wakrah", lng: 51, lat: 25.33 }, { name: "Al Khor", lng: 52, lat: 25.33 }], legSeconds: [3600],
+  };
+  const tile = [{
+    id: "doha", name: "Doha 1, 2", lng: 51.52, lat: 25.34, tz: "Asia/Qatar", city: "Doha", state: "", units: [
+      { id: "d2", name: "Doha 2nd Ward", subType: "CONVENTIONAL", day: "FRIDAY", start: "09:00" },
+      { id: "d1", name: "Doha 1st Ward", subType: "CONVENTIONAL", day: "FRIDAY", start: "13:00" },
+    ],
+  }];
+  const filters = { subtypes: ["CONVENTIONAL"], maxDetourMin: 30, windowMin: -60, windowMax: 10, wide: false, wideHours: 2, showFlagged: false, sort: "best" };
+  const deps = { loadTile: async (key) => (key === "e51_n25" ? tile : null), matrix: fakeMatrix, concurrency: 1 };
+  return { route, filters, deps };
+}
+await atest("Friday meetings in Qatar fit a Friday drive, judged in the building's zone", async () => {
+  // 05:00Z is 08:00 in Doha on Friday 2026-09-25; the 09:00 ward is ~30 min ahead at the halfway point.
+  const { route, filters, deps } = qatarFixture(new Date("2026-09-25T05:00:00Z"));
+  const out = await findCandidates(route, filters, deps);
+  const d2 = out.find((c) => c.unit.id === "d2"), d1 = out.find((c) => c.unit.id === "d1");
+  assert.equal(d2.wrongDay, false);
+  assert.equal(d2.meetsOn, "FRIDAY");
+  assert.ok(d2.deltaMinutes < -20 && d2.deltaMinutes > -40, String(d2.deltaMinutes));
+  assert.equal(d2.passes, true);
+  assert.equal(d1.wrongDay, false);
+  assert.equal(d1.passes, false, "13:00 is four hours off");
+});
+await atest("a Sunday drive through Qatar finds no meeting", async () => {
+  const { route, filters, deps } = qatarFixture(new Date("2026-09-27T05:00:00Z"));
+  const out = await findCandidates(route, filters, deps);
+  assert.ok(out.length >= 2);
+  assert.ok(out.every((c) => c.wrongDay && !c.passes && c.deltaMinutes === null));
+});
+await atest("the weekday flips at Doha's midnight, not the traveller's", async () => {
+  // 21:30Z Friday is 00:30 Saturday in Doha: no meeting, even though it is
+  // still Friday afternoon in Utah.
+  const { route, filters, deps } = qatarFixture(new Date("2026-09-25T21:30:00Z"));
+  const out = await findCandidates(route, filters, deps);
+  assert.ok(out.every((c) => c.wrongDay));
+});
+
 await atest("findCandidates: showFlagged surfaces flagged units with no delta", async () => {
   const { route, tile, filters } = fixture();
   const deps = { loadTile: async () => tile, matrix: fakeMatrix, concurrency: 1 };
