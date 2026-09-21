@@ -10,6 +10,7 @@ import { dwellBefore, applyDwell } from "./js/routing.js";
 import { parseAbrpXlsx, parseAbrpRows, parseSheetRows, parseAbrpDuration, parseClock, cleanStopName, isUnresolvableName, readZipEntry } from "./js/abrp.js";
 import { deflateRawSync } from "node:zlib";
 import { encodeShare, decodeShare, sharePayloadFrom, shareUrl } from "./js/share.js";
+import { rankSuggestions } from "./js/geocode.js";
 import { parseGoogleUrl, parseAppleUrl, parseGoogleDeparture, parseLink, defaultDwellMinutes } from "./js/providers.js";
 
 let passed = 0, failed = 0;
@@ -528,6 +529,31 @@ test("applyDwell with per-leg scales stretches each leg by its own factor", () =
   const pts = [{ t: 0, leg: 0 }, { t: 50, leg: 0 }, { t: 100, leg: 0 }, { t: 200, leg: 1 }, { t: 300, leg: 1 }];
   applyDwell(pts, places, [2, 0.5]);
   assert.deepEqual(pts.map((p) => p.t), [0, 100, 200, 200 + 50 + 600, 200 + 100 + 600]);
+});
+
+console.log("geocode");
+test("rankSuggestions puts the city named Istanbul above a restaurant and a village of that name", () => {
+  const photonOrder = [
+    { name: "Istanbul, Sokolov, Karlovy Vary Region, Czechia", kind: "amenity:fast_food" },
+    { name: "Istanbul, Germany", kind: "amenity:restaurant" },
+    { name: "Istanbul, Turkey", kind: "place:city" },
+    { name: "Istanbul, Turkey", kind: "place:province" },
+  ];
+  const ranked = rankSuggestions("Istanbul", photonOrder);
+  assert.equal(ranked[0].kind, "place:city");
+  // The rest tie on score, so Photon's order is kept: fast food, restaurant, province.
+  assert.deepEqual(ranked.slice(1).map((p) => p.kind), ["amenity:fast_food", "amenity:restaurant", "place:province"]);
+});
+test("rankSuggestions: exact name beats prefix, town beats village, order otherwise kept", () => {
+  const list = [
+    { name: "Springfield Township, Ohio", kind: "boundary:administrative" },
+    { name: "Springfield, Illinois", kind: "place:city" },
+    { name: "Springfield, Vermont", kind: "place:village" },
+    { name: "Springfield, Missouri", kind: "place:city" },
+  ];
+  const r = rankSuggestions("Springfield", list).map((p) => p.name);
+  // Cities first in Photon's order; an exact-name village beats a prefix-match township.
+  assert.deepEqual(r, ["Springfield, Illinois", "Springfield, Missouri", "Springfield, Vermont", "Springfield Township, Ohio"]);
 });
 
 console.log("share");
