@@ -49,6 +49,8 @@ body { overflow-x: hidden; }
 .brand .logo { width: 36px; height: 36px; flex: 0 0 auto; border-radius: 8px; }
 h1 { font-size: 20px; margin: 0 0 2px; }
 .tagline { color: var(--muted); margin: 0; font-size: 13px; font-style: italic; }
+.brand .repo { margin-left: auto; flex: 0 0 auto; display: inline-flex; padding: 6px; color: var(--muted); border-radius: 6px; }
+.brand .repo:hover, .brand .repo:focus-visible { color: var(--ink); }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 8px; }
 
 .field { margin-bottom: 10px; }

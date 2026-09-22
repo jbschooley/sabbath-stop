@@ -7,7 +7,7 @@
 //
 // VERSION must match the ?v= stamp in index.html. Bump both on every deploy:
 // the shell cache is named by it, and activating a new version drops the old.
-const VERSION = "2026092059";
+const VERSION = "2026092201";
 const SHELL = `ss-shell-${VERSION}`;
 const DATA = "ss-data";
 const MAP = "ss-map";
