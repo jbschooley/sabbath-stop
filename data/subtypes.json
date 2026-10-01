@@ -2,7 +2,7 @@
   {
     "code": "CONVENTIONAL",
     "label": "Conventional",
-    "count": 28465
+    "count": 28468
   },
   {
     "code": "SPANISH",
@@ -12,7 +12,7 @@
   {
     "code": "YSA",
     "label": "Young Single Adult",
-    "count": 806
+    "count": 807
   },
   {
     "code": "YSA_JR",
@@ -22,12 +22,12 @@
   {
     "code": "TONGAN",
     "label": "Tongan",
-    "count": 148
+    "count": 151
   },
   {
     "code": "STUDENT_MARRIED",
     "label": "Student Married",
-    "count": 117
+    "count": 118
   },
   {
     "code": "SAMOAN",
@@ -42,7 +42,7 @@
   {
     "code": "ENGLISH",
     "label": "English",
-    "count": 70
+    "count": 71
   },
   {
     "code": "SINGLE_ADULT",
@@ -140,6 +140,11 @@
     "count": 5
   },
   {
+    "code": "FILIPINO",
+    "label": "Filipino",
+    "count": 3
+  },
+  {
     "code": "CAMBODIAN",
     "label": "Cambodian",
     "count": 3
@@ -178,11 +183,6 @@
     "code": "STUDENT",
     "label": "Student",
     "count": 3
-  },
-  {
-    "code": "FILIPINO",
-    "label": "Filipino",
-    "count": 2
   },
   {
     "code": "NATIVE_AMERICAN",

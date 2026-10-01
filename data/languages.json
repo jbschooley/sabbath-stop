@@ -2,17 +2,17 @@
   {
     "code": "en",
     "label": "English",
-    "count": 16603
+    "count": 16609
   },
   {
     "code": "es",
     "label": "Spanish",
-    "count": 7747
+    "count": 7751
   },
   {
     "code": "pt",
     "label": "Portuguese",
-    "count": 2227
+    "count": 2223
   },
   {
     "code": "fr",
@@ -27,7 +27,7 @@
   {
     "code": "to",
     "label": "Tongan",
-    "count": 324
+    "count": 327
   },
   {
     "code": "ceb",
@@ -112,7 +112,7 @@
   {
     "code": "th",
     "label": "Thai",
-    "count": 39
+    "count": 40
   },
   {
     "code": "pag",
